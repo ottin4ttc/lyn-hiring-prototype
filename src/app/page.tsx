@@ -3,9 +3,11 @@
 /**
  * Workbench 1: Case Simulator
  * Interactive simulator with stage advancement, block, return, and decision log.
+ * Supports ?expand=<caseId> URL param to auto-expand a specific case.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useSimulator } from '@/hooks/useSimulator';
 import { STAGE_ORDER, WORKFLOW_STATE_LABELS, REVIEW_STATUS_LABELS } from '@/data/mock-cases';
 import type { Stage, StageRunStatus, ReviewStatus } from '@/data/mock-cases';
@@ -33,7 +35,7 @@ function reviewStatusBadge(review_status: ReviewStatus) {
   );
 }
 
-export default function CaseSimulator() {
+function CaseSimulatorInner() {
   const {
     state,
     advanceStage,
@@ -47,8 +49,21 @@ export default function CaseSimulator() {
     startCase,
     getDecisionLogForCandidate,
   } = useSimulator();
-  const [expandedCase, setExpandedCase] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const expandParam = searchParams.get('expand');
+  const [expandedCase, setExpandedCase] = useState<string | null>(expandParam);
   const [reasonInputs, setReasonInputs] = useState<Record<string, string>>({});
+
+  // Auto-expand case from URL param
+  useEffect(() => {
+    if (expandParam) {
+      setExpandedCase(expandParam);
+      // Scroll to it after mount
+      setTimeout(() => {
+        document.getElementById(`case-${expandParam}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    }
+  }, [expandParam]);
 
   function getReason(key: string) {
     return reasonInputs[key] ?? '';
@@ -90,7 +105,7 @@ export default function CaseSimulator() {
             const isExpanded = expandedCase === c.id;
 
             return (
-              <div key={c.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div key={c.id} id={`case-${c.id}`} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Case Header */}
                 <div
                   className="px-6 py-4 flex items-start justify-between cursor-pointer hover:bg-slate-50 transition-colors"
@@ -171,11 +186,12 @@ export default function CaseSimulator() {
                                 onChange={(e) => setReason(candKey, e.target.value)}
                                 className="text-xs border border-slate-200 rounded px-2 py-1 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400"
                               />
-                              {/* Start button only for pending cases */}
+                              {/* Start button only for pending cases — starts case, sets active + writes stage_run + decision_log */}
                               {isPending(c.id) && (
                                 <button
                                   onClick={() => startCase(c.id, cand.id, getReason(candKey) || 'Case started – intake initiated')}
                                   className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-semibold"
+                                  title="将 case 标为 active，stage_run 写入 in_progress，decision_log 写入 advance 记录"
                                 >
                                   🚀 Start Case
                                 </button>
@@ -184,35 +200,40 @@ export default function CaseSimulator() {
                                 disabled={!advanceable}
                                 onClick={() => advanceStage(c.id, cand.id, getReason(candKey) || undefined)}
                                 className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                title="推进到下一阶段，写入 stage_run + decision_log"
                               >
                                 ▶ Advance Stage
                               </button>
                               <button
                                 onClick={() => returnStage(c.id, cand.id, getReason(candKey) || 'Returned for revision')}
                                 className="px-3 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
+                                title="将 stage_run 标为 returned，写入 decision_log"
                               >
                                 ↩ Return
                               </button>
                               <button
                                 onClick={() => blockStage(c.id, cand.id, getReason(candKey) || 'Stage blocked')}
                                 className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                title="将 stage_run 标为 blocked，写入 decision_log"
                               >
                                 ⛔ Block
                               </button>
                             </div>
-                            {/* Review controls – shown when stage needs review */}
+                            {/* Review controls – shown when stage is in_progress, pending_review, or needs_human_review */}
                             {hasReviewableStage(c.id, cand.id) && (
-                              <div className="flex flex-wrap gap-2 items-center border-t border-slate-100 pt-2 mt-1">
-                                <span className="text-xs text-slate-400">Review:</span>
+                              <div className="flex flex-wrap gap-2 items-center border-t border-slate-100 pt-2 mt-1 bg-amber-50 rounded-b px-2 pb-2">
+                                <span className="text-xs text-amber-700 font-semibold w-full pt-1">审核操作（写入 stage_run + decision_log）</span>
                                 <button
                                   onClick={() => returnReview(c.id, cand.id, getReason(candKey) || 'Returned for human revision')}
                                   className="px-3 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
+                                  title="review_status → needs_human_review，stage_run 写入 returned，decision_log 写入 return"
                                 >
                                   ↩ Return for Review
                                 </button>
                                 <button
                                   onClick={() => rejectReview(c.id, cand.id, getReason(candKey) || 'Review rejected')}
                                   className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                                  title="review_status → rejected，stage_run 写入 returned，decision_log 写入 reject"
                                 >
                                   ✕ Reject Review
                                 </button>
@@ -259,7 +280,7 @@ export default function CaseSimulator() {
                         </div>
                       );
                     })}
-                    <div className="mt-2">
+                    <div className="mt-2 flex gap-3">
                       <Link
                         href={`/pipeline?case=${c.id}`}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
@@ -275,5 +296,13 @@ export default function CaseSimulator() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function CaseSimulator() {
+  return (
+    <Suspense fallback={<div className="p-8 text-slate-400">Loading...</div>}>
+      <CaseSimulatorInner />
+    </Suspense>
   );
 }

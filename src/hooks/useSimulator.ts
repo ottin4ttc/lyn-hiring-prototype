@@ -550,7 +550,13 @@ export function useSimulator() {
       if (!cand) return false;
       const lastRun = cand.stage_run.at(-1);
       if (!lastRun) return false;
-      return lastRun.review_status === 'needs_human_review' || lastRun.review_status === 'pending_review';
+      // Show review controls for: pending_review, needs_human_review, or in_progress
+      // (allows human to explicitly return/reject any active review stage)
+      return (
+        lastRun.review_status === 'needs_human_review' ||
+        lastRun.review_status === 'pending_review' ||
+        lastRun.status === 'in_progress'
+      );
     },
     [state.cases],
   );
