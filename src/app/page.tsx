@@ -34,7 +34,19 @@ function reviewStatusBadge(review_status: ReviewStatus) {
 }
 
 export default function CaseSimulator() {
-  const { state, advanceStage, returnStage, blockStage, canAdvance, getDecisionLogForCandidate } = useSimulator();
+  const {
+    state,
+    advanceStage,
+    returnStage,
+    blockStage,
+    canAdvance,
+    isPending,
+    hasReviewableStage,
+    rejectReview,
+    returnReview,
+    startCase,
+    getDecisionLogForCandidate,
+  } = useSimulator();
   const [expandedCase, setExpandedCase] = useState<string | null>(null);
   const [reasonInputs, setReasonInputs] = useState<Record<string, string>>({});
 
@@ -151,7 +163,7 @@ export default function CaseSimulator() {
                           {/* Action Controls */}
                           <div className="mb-3">
                             <p className="text-xs font-semibold text-slate-500 mb-2">Simulator Controls</p>
-                            <div className="flex flex-wrap gap-2 items-center">
+                            <div className="flex flex-wrap gap-2 items-center mb-2">
                               <input
                                 type="text"
                                 placeholder="Reason (optional)"
@@ -159,6 +171,15 @@ export default function CaseSimulator() {
                                 onChange={(e) => setReason(candKey, e.target.value)}
                                 className="text-xs border border-slate-200 rounded px-2 py-1 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400"
                               />
+                              {/* Start button only for pending cases */}
+                              {isPending(c.id) && (
+                                <button
+                                  onClick={() => startCase(c.id, cand.id, getReason(candKey) || 'Case started – intake initiated')}
+                                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-semibold"
+                                >
+                                  🚀 Start Case
+                                </button>
+                              )}
                               <button
                                 disabled={!advanceable}
                                 onClick={() => advanceStage(c.id, cand.id, getReason(candKey) || undefined)}
@@ -179,6 +200,24 @@ export default function CaseSimulator() {
                                 ⛔ Block
                               </button>
                             </div>
+                            {/* Review controls – shown when stage needs review */}
+                            {hasReviewableStage(c.id, cand.id) && (
+                              <div className="flex flex-wrap gap-2 items-center border-t border-slate-100 pt-2 mt-1">
+                                <span className="text-xs text-slate-400">Review:</span>
+                                <button
+                                  onClick={() => returnReview(c.id, cand.id, getReason(candKey) || 'Returned for human revision')}
+                                  className="px-3 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
+                                >
+                                  ↩ Return for Review
+                                </button>
+                                <button
+                                  onClick={() => rejectReview(c.id, cand.id, getReason(candKey) || 'Review rejected')}
+                                  className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                                >
+                                  ✕ Reject Review
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* Decision Log */}

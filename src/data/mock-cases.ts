@@ -36,11 +36,13 @@ export type PrivacyStatus = 'no_real_pii' | 'pii_present' | 'privacy_violation';
 export type SourceStatus = 'synthetic_simulation' | 'real_data' | 'anonymized';
 
 export type WorkflowCaseState =
+  | 'pending'
   | 'active'
   | 'blocked'
   | 'needs_human_review'
   | 'returned'
   | 'rejected'
+  | 'to_confirm'
   | 'privacy_violation'
   | 'stale_mock_data'
   | 'external_action_attempt'
@@ -172,6 +174,45 @@ export interface HiringCase extends WorkflowCase {}
 // ── Mock Data ──────────────────────────────────────────────────────────────────
 
 export const MOCK_CASES: HiringCase[] = [
+  // ── CASE 000: PENDING case – not yet started ────────────────────────────────
+  {
+    id: 'case-000',
+    title: '[SYNTHETIC] Head of Marketing – B2B SaaS (Pending Start)',
+    role: 'Head of Marketing',
+    client_code: 'CLIENT-KAPPA',
+    current_state: 'pending',
+    current_stage: 'Need',
+    review_status: 'pending_review',
+    privacy_status: 'no_real_pii',
+    source_status: 'synthetic_simulation',
+    created_at: '2024-04-01',
+    candidates: [
+      {
+        synthetic: true,
+        privacy_status: 'no_real_pii',
+        source_status: 'synthetic_simulation',
+        pii_fields_present: false,
+        id: 'cand-k1',
+        code: 'CAND-K1',
+        fit_score: 0,
+        score_breakdown: { technical: 0, leadership: 0, culture_fit: 0, growth_potential: 0 },
+        stage_run: [
+          { stage: 'Need', status: 'pending', review_status: 'pending_review', started_at: '2024-04-01' },
+        ],
+        decision_log: [
+          { stage: 'Need', decision: 'pending', reason: 'Case created; awaiting recruiter to start intake process', by: 'SYSTEM', at: '2024-04-01' },
+        ],
+        evidence_refs: [],
+        risk_flags: [],
+        disabled_external_actions: [
+          { action_type: 'candidate_outreach', state: 'blocked', label: 'Contact Candidate', reason: 'External outreach disabled in prototype' },
+        ],
+        learning_type: 'IC-to-Manager transition',
+        automation_opportunity: 'none',
+      },
+    ],
+  },
+
   // ── CASE 001: Head of Product – active, at Shortlist ──────────────────────
   {
     id: 'case-001',
@@ -659,6 +700,56 @@ export const MOCK_CASES: HiringCase[] = [
     ],
   },
 
+  // ── CASE 010: TO_CONFIRM case – awaiting human confirmation ──────────────
+  {
+    id: 'case-010',
+    title: '[SYNTHETIC] VP Product – EdTech Series B (To Confirm)',
+    role: 'VP Product',
+    client_code: 'CLIENT-LAMBDA',
+    current_state: 'to_confirm',
+    current_stage: 'Shortlist',
+    review_status: 'pending_review',
+    privacy_status: 'no_real_pii',
+    source_status: 'synthetic_simulation',
+    created_at: '2024-03-20',
+    candidates: [
+      {
+        synthetic: true,
+        privacy_status: 'no_real_pii',
+        source_status: 'synthetic_simulation',
+        pii_fields_present: false,
+        id: 'cand-j1',
+        code: 'CAND-J1',
+        fit_score: 83,
+        score_breakdown: { technical: 80, leadership: 84, culture_fit: 86, growth_potential: 82 },
+        stage_run: [
+          { stage: 'Need', status: 'completed', review_status: 'approved', started_at: '2024-03-20', completed_at: '2024-03-22' },
+          { stage: 'Role Profile', status: 'completed', review_status: 'approved', started_at: '2024-03-22', completed_at: '2024-03-25' },
+          { stage: 'Talent Map', status: 'completed', review_status: 'approved', started_at: '2024-03-25', completed_at: '2024-03-28' },
+          { stage: 'Longlist', status: 'completed', review_status: 'approved', started_at: '2024-03-28', completed_at: '2024-04-01', reviewer: 'RECRUITER-J' },
+          { stage: 'Shortlist', status: 'in_progress', review_status: 'pending_review', started_at: '2024-04-01', reviewer: 'RECRUITER-J' },
+        ],
+        decision_log: [
+          { stage: 'Longlist', decision: 'advance', reason: 'Strong EdTech + product background', by: 'RECRUITER-J', at: '2024-04-01' },
+          { stage: 'Shortlist', decision: 'pending', reason: 'TO CONFIRM: Client has not confirmed equity structure after Series B close; offer terms require human confirmation before advancing', by: 'RECRUITER-J', at: '2024-04-02' },
+        ],
+        evidence_refs: [
+          { type: 'interview_note', label: 'Product Strategy Interview', summary: 'Strong K-12 market insight; clear roadmap for 0-to-1 expansion' },
+          { type: 'resume_signal', label: 'Resume Signal', summary: '3 successful consumer ed products, 2M+ MAU at peak' },
+        ],
+        risk_flags: [
+          { level: 'medium', label: 'Offer Terms Unconfirmed', detail: 'Equity package needs client confirmation before shortlist advance; blocking promotion until confirmed' },
+        ],
+        disabled_external_actions: [
+          { action_type: 'candidate_outreach', state: 'blocked', label: 'Advance Offer Discussion', reason: 'External outreach disabled in prototype' },
+          { action_type: 'client_notification', state: 'blocked', label: 'Confirm Equity with Client', reason: 'Client notifications disabled in prototype' },
+        ],
+        learning_type: 'Founder-fit dependency',
+        automation_opportunity: 'flag-stale-feedback',
+      },
+    ],
+  },
+
   // ── CASE 009: EXTERNAL ACTION ATTEMPT case ────────────────────────────────
   {
     id: 'case-009',
@@ -724,11 +815,13 @@ export const STAGE_ORDER: Stage[] = [
 ];
 
 export const WORKFLOW_STATE_LABELS: Record<WorkflowCaseState, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-slate-100 text-slate-500' },
   active: { label: 'Active', color: 'bg-green-100 text-green-700' },
   blocked: { label: 'Blocked', color: 'bg-red-100 text-red-700' },
   needs_human_review: { label: 'Needs Human Review', color: 'bg-amber-100 text-amber-700' },
   returned: { label: 'Returned', color: 'bg-orange-100 text-orange-700' },
   rejected: { label: 'Rejected', color: 'bg-red-200 text-red-800' },
+  to_confirm: { label: 'To Confirm', color: 'bg-yellow-100 text-yellow-700' },
   privacy_violation: { label: 'Privacy Violation', color: 'bg-purple-100 text-purple-700' },
   stale_mock_data: { label: 'Stale Mock Data', color: 'bg-slate-100 text-slate-600' },
   external_action_attempt: { label: 'External Action Attempt', color: 'bg-rose-100 text-rose-700' },

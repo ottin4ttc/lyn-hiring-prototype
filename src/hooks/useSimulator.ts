@@ -46,8 +46,11 @@ export type SimAction =
   | { type: 'BLOCK_STAGE'; caseId: string; candidateId: string; by?: string; reason?: string }
   | { type: 'APPROVE_CANDIDATE'; caseId: string; candidateId: string; by?: string; reason?: string }
   | { type: 'REJECT_CANDIDATE'; caseId: string; candidateId: string; by?: string; reason?: string }
+  | { type: 'REJECT_REVIEW'; caseId: string; candidateId: string; by?: string; reason?: string }
+  | { type: 'RETURN_REVIEW'; caseId: string; candidateId: string; by?: string; reason?: string }
   | { type: 'HOLD_CANDIDATE'; caseId: string; candidateId: string; by?: string; reason?: string }
   | { type: 'OVERRIDE_DECISION'; caseId: string; candidateId: string; by?: string; reason?: string }
+  | { type: 'START_CASE'; caseId: string; candidateId: string; by?: string; reason?: string }
   | {
       type: 'ADD_FEEDBACK';
       caseId: string;
@@ -243,6 +246,94 @@ function reducer(state: SimState, action: SimAction): SimState {
       };
     }
 
+    case 'REJECT_REVIEW': {
+      const curStage =
+        state.cases
+          .find((c) => c.id === action.caseId)
+          ?.candidates.find((ca) => ca.id === action.candidateId)
+          ?.stage_run.at(-1)?.stage ?? 'Need';
+      const newEntry: SimDecisionEntry = {
+        id: makeId(),
+        caseId: action.caseId,
+        candidateId: action.candidateId,
+        stage: curStage,
+        action: 'reject',
+        reason: action.reason ?? 'Review rejected – returned for revision',
+        by: action.by ?? actor,
+        at: ts,
+      };
+      return {
+        ...state,
+        cases: updateCandidate(state.cases, action.caseId, action.candidateId, (cand) => ({
+          ...cand,
+          stage_run: updateCurrentStageRun(cand.stage_run, 'returned', 'rejected'),
+        })),
+        decisionLog: [...state.decisionLog, newEntry],
+      };
+    }
+
+    case 'RETURN_REVIEW': {
+      const curStage2 =
+        state.cases
+          .find((c) => c.id === action.caseId)
+          ?.candidates.find((ca) => ca.id === action.candidateId)
+          ?.stage_run.at(-1)?.stage ?? 'Need';
+      const newEntry2: SimDecisionEntry = {
+        id: makeId(),
+        caseId: action.caseId,
+        candidateId: action.candidateId,
+        stage: curStage2,
+        action: 'return',
+        reason: action.reason ?? 'Review returned for human revision',
+        by: action.by ?? actor,
+        at: ts,
+      };
+      return {
+        ...state,
+        cases: updateCandidate(state.cases, action.caseId, action.candidateId, (cand) => ({
+          ...cand,
+          stage_run: updateCurrentStageRun(cand.stage_run, 'returned', 'needs_human_review'),
+        })),
+        decisionLog: [...state.decisionLog, newEntry2],
+      };
+    }
+
+    case 'START_CASE': {
+      const startStage =
+        state.cases
+          .find((c) => c.id === action.caseId)
+          ?.candidates.find((ca) => ca.id === action.candidateId)
+          ?.stage_run.at(-1)?.stage ?? 'Need';
+      const startEntry: SimDecisionEntry = {
+        id: makeId(),
+        caseId: action.caseId,
+        candidateId: action.candidateId,
+        stage: startStage,
+        action: 'advance',
+        reason: action.reason ?? 'Case started – intake process initiated',
+        by: action.by ?? actor,
+        at: ts,
+      };
+      return {
+        ...state,
+        cases: state.cases.map((c) => {
+          if (c.id !== action.caseId) return c;
+          return {
+            ...c,
+            current_state: 'active' as WorkflowCaseState,
+            candidates: c.candidates.map((cand) => {
+              if (cand.id !== action.candidateId) return cand;
+              return {
+                ...cand,
+                stage_run: updateCurrentStageRun(cand.stage_run, 'in_progress', 'pending_review'),
+              };
+            }),
+          };
+        }),
+        decisionLog: [...state.decisionLog, startEntry],
+      };
+    }
+
     case 'HOLD_CANDIDATE': {
       const newEntry: SimDecisionEntry = {
         id: makeId(),
@@ -361,6 +452,24 @@ export function useSimulator() {
     [],
   );
 
+  const rejectReview = useCallback(
+    (caseId: string, candidateId: string, reason?: string) =>
+      dispatch({ type: 'REJECT_REVIEW', caseId, candidateId, reason }),
+    [],
+  );
+
+  const returnReview = useCallback(
+    (caseId: string, candidateId: string, reason?: string) =>
+      dispatch({ type: 'RETURN_REVIEW', caseId, candidateId, reason }),
+    [],
+  );
+
+  const startCase = useCallback(
+    (caseId: string, candidateId: string, reason?: string) =>
+      dispatch({ type: 'START_CASE', caseId, candidateId, reason }),
+    [],
+  );
+
   const holdCandidate = useCallback(
     (caseId: string, candidateId: string, reason?: string) =>
       dispatch({ type: 'HOLD_CANDIDATE', caseId, candidateId, reason }),
@@ -426,6 +535,26 @@ export function useSimulator() {
     [state.cases],
   );
 
+  const isPending = useCallback(
+    (caseId: string): boolean => {
+      const c = state.cases.find((c) => c.id === caseId);
+      return c?.current_state === 'pending';
+    },
+    [state.cases],
+  );
+
+  const hasReviewableStage = useCallback(
+    (caseId: string, candidateId: string): boolean => {
+      const c = state.cases.find((c) => c.id === caseId);
+      const cand = c?.candidates.find((ca) => ca.id === candidateId);
+      if (!cand) return false;
+      const lastRun = cand.stage_run.at(-1);
+      if (!lastRun) return false;
+      return lastRun.review_status === 'needs_human_review' || lastRun.review_status === 'pending_review';
+    },
+    [state.cases],
+  );
+
   return {
     state,
     dispatch,
@@ -435,6 +564,9 @@ export function useSimulator() {
     blockStage,
     approveCandidate,
     rejectCandidate,
+    rejectReview,
+    returnReview,
+    startCase,
     holdCandidate,
     overrideDecision,
     addFeedback,
@@ -444,5 +576,7 @@ export function useSimulator() {
     getCandidateCurrentStageRun,
     getDecisionLogForCandidate,
     canAdvance,
+    isPending,
+    hasReviewableStage,
   };
 }

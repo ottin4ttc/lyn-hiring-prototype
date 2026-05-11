@@ -14,7 +14,9 @@ import { StageBadge } from '@/components/StageBadge';
 import Link from 'next/link';
 
 const STATE_ORDER: WorkflowCaseState[] = [
+  'pending',
   'active',
+  'to_confirm',
   'needs_human_review',
   'blocked',
   'returned',
