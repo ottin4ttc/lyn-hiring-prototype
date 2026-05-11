@@ -1,19 +1,94 @@
 'use client';
+
 /**
  * Workbench 3: Candidate Evidence Panel
- * Interactive: approve / hold / reject evidence, decision_log留痕
+ * Interactive: approve, hold, reject/override evidence.
+ * All actions write to local decision_log state with timestamp.
  */
-import { MOCK_CASES } from '@/data/mock-cases';
+
+import { useState } from 'react';
 import { useSimulator } from '@/hooks/useSimulator';
+import { REVIEW_STATUS_LABELS } from '@/data/mock-cases';
+import type { ReviewStatus } from '@/data/mock-cases';
 import { Nav } from '@/components/Nav';
 import { StageBadge } from '@/components/StageBadge';
 
-export default function EvidencePanel() {
-  const { cases, approveReview, rejectReview, blockStage } = useSimulator(MOCK_CASES);
-
-  const allCandidates = cases.flatMap(c =>
-    c.candidates.map(cand => ({ ...cand, caseId: c.id, caseTitle: c.title, caseRole: c.role }))
+function ScoreRadar({ breakdown }: {
+  breakdown: { technical: number; leadership: number; culture_fit: number; growth_potential: number };
+}) {
+  const dims = [
+    { key: 'technical', label: 'Technical Depth', value: breakdown.technical },
+    { key: 'leadership', label: 'Leadership', value: breakdown.leadership },
+    { key: 'culture_fit', label: 'Culture Fit', value: breakdown.culture_fit },
+    { key: 'growth_potential', label: 'Growth Potential', value: breakdown.growth_potential },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {dims.map((d) => (
+        <div key={d.key} className="bg-slate-50 rounded-lg p-3">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-slate-600">{d.label}</span>
+            <span className={`font-bold ${d.value >= 85 ? 'text-green-600' : d.value >= 70 ? 'text-amber-600' : 'text-red-500'}`}>
+              {d.value === 0 ? 'N/A' : d.value}
+            </span>
+          </div>
+          <div className="bg-slate-200 rounded-full h-2">
+            <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${d.value}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
   );
+}
+
+interface LocalDecisionEntry {
+  id: string;
+  candidateId: string;
+  action: 'approve' | 'hold' | 'reject' | 'override';
+  reason: string;
+  at: string;
+}
+
+export default function EvidencePanel() {
+  const { state } = useSimulator();
+  const [localDecisions, setLocalDecisions] = useState<LocalDecisionEntry[]>([]);
+  const [reasonInputs, setReasonInputs] = useState<Record<string, string>>({});
+
+  const allCandidates = state.cases.flatMap((c) =>
+    c.candidates.map((cand) => ({
+      ...cand,
+      caseTitle: c.title,
+      caseRole: c.role,
+      caseId: c.id,
+    }))
+  );
+
+  function getReason(key: string) {
+    return reasonInputs[key] ?? '';
+  }
+
+  function setReason(key: string, val: string) {
+    setReasonInputs((prev) => ({ ...prev, [key]: val }));
+  }
+
+  function addDecision(
+    candidateId: string,
+    action: LocalDecisionEntry['action'],
+    reason?: string,
+  ) {
+    const entry: LocalDecisionEntry = {
+      id: Math.random().toString(36).slice(2, 10),
+      candidateId,
+      action,
+      reason: reason || `${action} (no reason provided)`,
+      at: new Date().toISOString(),
+    };
+    setLocalDecisions((prev) => [...prev, entry]);
+  }
+
+  function getCandDecisions(candidateId: string) {
+    return localDecisions.filter((d) => d.candidateId === candidateId);
+  }
 
   return (
     <>
@@ -21,62 +96,68 @@ export default function EvidencePanel() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Candidate Evidence Panel</h1>
-          <p className="text-slate-500 text-sm mt-1">工作台 3 / 5 · 证据审核 — 批准/Hold/拒绝，决策留痕</p>
+          <p className="text-slate-500 text-sm mt-1">
+            Workbench 3 / 5 · Approve, hold, or reject evidence. All decisions are local state only.
+          </p>
         </div>
 
         <div className="space-y-8">
-          {allCandidates.map(cand => (
-            <div key={cand.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              {/* Header */}
-              <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
-                <div className="flex flex-wrap items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1 flex-wrap">
-                      <h2 className="text-lg font-bold text-slate-900 font-mono">{cand.code}</h2>
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                        cand.privacy_status === 'no_real_pii' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {cand.privacy_status}
-                      </span>
-                      <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
-                        synthetic={String(cand.synthetic)} · pii={String(cand.pii_fields_present)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-500">{cand.caseRole} · {cand.caseTitle}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-black text-blue-600">{cand.fit_score || '—'}</div>
-                    <div className="text-xs text-slate-400">Fit Score</div>
-                    <div className="mt-1"><StageBadge stage={cand.current_stage} /></div>
-                  </div>
-                </div>
-              </div>
+          {allCandidates.map((cand) => {
+            const lastRun = cand.stage_run.at(-1);
+            const candDecisions = getCandDecisions(cand.id);
+            const reasonKey = `reason-${cand.id}`;
 
-              <div className="p-6 grid md:grid-cols-2 gap-6">
-                {/* Score Breakdown */}
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-700 mb-3">评分维度</h3>
-                  {Object.entries(cand.score_breakdown).map(([k, v]) => (
-                    <div key={k} className="flex items-center gap-2 text-xs mb-2">
-                      <span className="text-slate-400 w-24 shrink-0">{
-                        k === 'technical' ? '技术深度' :
-                        k === 'leadership' ? '领导力' :
-                        k === 'culture_fit' ? '文化契合' : '成长潜力'
-                      }</span>
-                      <div className="flex-1 bg-slate-100 rounded-full h-2">
-                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${v}%` }} />
+            return (
+              <div key={cand.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                {/* Header */}
+                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+                  <div className="flex flex-wrap items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h2 className="text-lg font-bold text-slate-900 font-mono">{cand.code}</h2>
+                        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                          {cand.caseRole} · {cand.caseTitle}
+                        </span>
                       </div>
-                      <span className="text-slate-500 w-6 text-right">{v}</span>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {lastRun && (
+                          <>
+                            <StageBadge stage={lastRun.stage} />
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${REVIEW_STATUS_LABELS[lastRun.review_status].color}`}>
+                              {REVIEW_STATUS_LABELS[lastRun.review_status].label}
+                            </span>
+                          </>
+                        )}
+                        <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded border border-green-200">
+                          synthetic: true · no_real_pii
+                        </span>
+                      </div>
                     </div>
-                  ))}
+                    <div className="text-right">
+                      <div className="text-3xl font-black text-blue-600">
+                        {cand.fit_score === 0 ? '—' : cand.fit_score}
+                      </div>
+                      <div className="text-xs text-slate-400">Fit Score</div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Evidence Refs */}
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-700 mb-3">证据参考 ({cand.evidence_refs.length})</h3>
-                  {cand.evidence_refs.length === 0
-                    ? <p className="text-xs text-slate-400">暂无证据记录</p>
-                    : <div className="space-y-2">
+                <div className="p-6 grid md:grid-cols-2 gap-6">
+                  {/* Score Breakdown */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Score Dimensions</h3>
+                    <ScoreRadar breakdown={cand.score_breakdown} />
+                  </div>
+
+                  {/* Evidence Refs */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">
+                      Evidence References ({cand.evidence_refs.length})
+                    </h3>
+                    {cand.evidence_refs.length === 0 ? (
+                      <p className="text-xs text-slate-400">No evidence records</p>
+                    ) : (
+                      <div className="space-y-2">
                         {cand.evidence_refs.map((ref, i) => (
                           <div key={i} className="border border-slate-100 rounded-lg p-3">
                             <div className="flex items-center gap-2 mb-1">
@@ -87,24 +168,54 @@ export default function EvidencePanel() {
                           </div>
                         ))}
                       </div>
-                  }
-                </div>
+                    )}
+                  </div>
 
-                {/* Risk Flags */}
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-700 mb-3">风险标记</h3>
-                  {cand.risk_flags.length === 0
-                    ? <p className="text-xs text-green-600">✓ 无风险标记</p>
-                    : <div className="space-y-2">
+                  {/* Stage Run history */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Stage History</h3>
+                    <div className="space-y-1.5">
+                      {cand.stage_run.map((sr, i) => {
+                        const reviewInfo = REVIEW_STATUS_LABELS[sr.review_status];
+                        return (
+                          <div key={i} className="flex items-center gap-2 text-xs">
+                            <StageBadge stage={sr.stage} />
+                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                              sr.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              sr.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                              sr.status === 'blocked' ? 'bg-red-100 text-red-700' :
+                              sr.status === 'returned' ? 'bg-orange-100 text-orange-700' :
+                              'bg-slate-100 text-slate-500'
+                            }`}>
+                              {sr.status}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${reviewInfo.color}`}>
+                              {reviewInfo.label}
+                            </span>
+                            {sr.reviewer && <span className="text-slate-400">by {sr.reviewer}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Risk Flags */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Risk Flags</h3>
+                    {cand.risk_flags.length === 0 ? (
+                      <p className="text-xs text-green-600">✓ No risk flags</p>
+                    ) : (
+                      <div className="space-y-2">
                         {cand.risk_flags.map((rf, i) => (
                           <div key={i} className={`rounded-lg p-3 border ${
-                            rf.level === 'high'   ? 'bg-red-50 border-red-200' :
+                            rf.level === 'high' ? 'bg-red-50 border-red-200' :
                             rf.level === 'medium' ? 'bg-amber-50 border-amber-200' :
                             'bg-slate-50 border-slate-200'
                           }`}>
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`text-xs font-bold uppercase ${
-                                rf.level === 'high' ? 'text-red-600' : rf.level === 'medium' ? 'text-amber-600' : 'text-slate-500'
+                                rf.level === 'high' ? 'text-red-600' :
+                                rf.level === 'medium' ? 'text-amber-600' : 'text-slate-500'
                               }`}>{rf.level}</span>
                               <span className="text-xs font-medium text-slate-700">{rf.label}</span>
                             </div>
@@ -112,60 +223,71 @@ export default function EvidencePanel() {
                           </div>
                         ))}
                       </div>
-                  }
+                    )}
+                  </div>
                 </div>
 
-                {/* Evidence Review Actions */}
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-700 mb-3">证据审核操作</h3>
-                  <div className="flex gap-2 flex-wrap mb-4">
+                {/* Interactive Evidence Actions */}
+                <div className="border-t border-slate-200 px-6 py-4">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Evidence Review Actions (local state)</h3>
+                  <div className="flex flex-wrap gap-2 items-center mb-3">
+                    <input
+                      type="text"
+                      placeholder="Decision reason (optional)"
+                      value={getReason(reasonKey)}
+                      onChange={(e) => setReason(reasonKey, e.target.value)}
+                      className="text-xs border border-slate-200 rounded px-2 py-1.5 w-52 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
                     <button
-                      onClick={() => approveReview(cand.caseId, cand.id, 'REVIEWER-01')}
-                      className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                      onClick={() => addDecision(cand.id, 'approve', getReason(reasonKey) || 'Evidence approved')}
+                      className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
                     >
-                      ✓ 批准证据
+                      ✓ Approve Evidence
                     </button>
                     <button
-                      onClick={() => blockStage(cand.caseId, cand.id, '证据不足，暂缓', 'REVIEWER-01')}
-                      className="px-3 py-1.5 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
+                      onClick={() => addDecision(cand.id, 'hold', getReason(reasonKey) || 'Evidence on hold')}
+                      className="px-3 py-1.5 text-sm bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
                     >
                       ⏸ Hold
                     </button>
                     <button
-                      onClick={() => rejectReview(cand.caseId, cand.id, '证据不满足推进条件', 'REVIEWER-01')}
-                      className="px-3 py-1.5 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                      onClick={() => addDecision(cand.id, 'reject', getReason(reasonKey) || 'Evidence rejected')}
+                      className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                     >
-                      ✗ 拒绝/Override
+                      ✗ Reject/Override
                     </button>
                   </div>
 
-                  {/* Decision Log */}
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2">决策日志</h3>
-                  <div className="space-y-1 max-h-36 overflow-y-auto">
-                    {cand.decision_log.map((log, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs">
-                        <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${
-                          log.decision === 'advance' ? 'bg-green-500' :
-                          log.decision === 'reject'  ? 'bg-red-500' :
-                          log.decision === 'hold'    ? 'bg-amber-500' : 'bg-slate-300'
-                        }`} />
-                        <div>
-                          <span className="font-medium text-slate-700">[{log.stage}]</span>{' '}
-                          <span className={
-                            log.decision === 'advance' ? 'text-green-600' :
-                            log.decision === 'reject'  ? 'text-red-600' :
-                            log.decision === 'hold'    ? 'text-amber-600' : 'text-slate-400'
-                          }>{log.decision}</span>{' '}
-                          <span className="text-slate-500">— {log.reason}</span>
-                          <div className="text-slate-400 mt-0.5">{log.by} · {log.at}</div>
-                        </div>
+                  {/* Local Decision Log */}
+                  {candDecisions.length > 0 && (
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-slate-500 mb-2">
+                        Local Decision Log ({candDecisions.length})
+                      </p>
+                      <div className="space-y-1">
+                        {candDecisions.map((entry) => (
+                          <div key={entry.id} className="text-xs flex gap-2 text-slate-600">
+                            <span className={
+                              entry.action === 'approve' ? 'text-green-600' :
+                              entry.action === 'reject' ? 'text-red-600' :
+                              entry.action === 'hold' ? 'text-amber-600' :
+                              'text-violet-600'
+                            }>
+                              ● {entry.action}
+                            </span>
+                            <span>{entry.reason}</span>
+                            <span className="text-slate-400 ml-auto shrink-0">
+                              {new Date(entry.at).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
     </>
