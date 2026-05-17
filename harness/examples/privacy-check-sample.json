@@ -1,0 +1,388 @@
+{
+  "meta": {
+    "generated_at": "2026-05-17T16:12:38.590Z",
+    "dry_run": true,
+    "issues_scanned": 6
+  },
+  "summary": {
+    "risk_level": "BLOCKED",
+    "recommendation": "block",
+    "pii_signals_count": 2,
+    "external_action_signals_count": 7,
+    "real_candidate_signals_count": 12
+  },
+  "checks": [
+    {
+      "check_id": "cand_non_synthetic",
+      "check_name": "非合成候选人数据（未标注 synthetic/mock/合成/匿名）",
+      "category": "real_candidate",
+      "status": "WARN",
+      "description": "包含\"候选人\"但未标注 synthetic/mock；需确认是否为真实数据",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "22cd2a15-9893-4a4f-9177-3ac65dd3abf0",
+          "identifier": "LYN-36",
+          "field": "description",
+          "matched_pattern": "cand_non_synthetic"
+        }
+      ],
+      "remediation": "确认数据为 synthetic/mock；添加 no_real_pii 标注"
+    },
+    {
+      "check_id": "ext_client_visible",
+      "check_name": "客户可见内容外发",
+      "category": "external_action",
+      "status": "FAIL",
+      "description": "客户可见内容外发，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "2ad3e81c-84dc-43ba-a775-3435eaa5184e",
+          "identifier": "LYN-36",
+          "field": "comment.content",
+          "matched_pattern": "ext_client_visible",
+          "excerpt": "客户可见"
+        }
+      ],
+      "remediation": "外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控"
+    },
+    {
+      "check_id": "pii_real_name_pattern",
+      "check_name": "疑似真实中文姓名",
+      "category": "pii",
+      "status": "WARN",
+      "description": "疑似真实中文姓名，检测到 2 处匹配",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "5db6197c-6d3b-4c2d-a6e9-9d0a31491a95",
+          "identifier": "LYN-36",
+          "field": "comment.content",
+          "matched_pattern": "pii_real_name_pattern",
+          "excerpt": "候选人对机会的, 候选人是否真的"
+        }
+      ],
+      "remediation": "移除或替换为合成数据；如为示例/测试数据，添加 mock/synthetic 标注"
+    },
+    {
+      "check_id": "ext_real_write",
+      "check_name": "生产系统写操作信号",
+      "category": "external_action",
+      "status": "FAIL",
+      "description": "生产系统写操作信号，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "b6f03785-0bd2-4d18-ada5-27cdb16d7717",
+          "identifier": "LYN-36",
+          "field": "comment.content",
+          "matched_pattern": "ext_real_write",
+          "excerpt": "Deployed Engineer、Prod"
+        }
+      ],
+      "remediation": "外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控"
+    },
+    {
+      "check_id": "cand_pii_marker",
+      "check_name": "真实 PII 标记",
+      "category": "real_candidate",
+      "status": "FAIL",
+      "description": "真实 PII 标记",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "b6f03785-0bd2-4d18-ada5-27cdb16d7717",
+          "identifier": "LYN-36",
+          "field": "comment.content",
+          "matched_pattern": "cand_pii_marker",
+          "excerpt": "真实候选人"
+        }
+      ],
+      "remediation": "替换为 synthetic 数据"
+    },
+    {
+      "check_id": "pii_email",
+      "check_name": "邮箱地址",
+      "category": "pii",
+      "status": "WARN",
+      "description": "邮箱地址，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "029a259c-4de4-4d85-ae63-41be5e66985b",
+          "identifier": "LYN-36",
+          "field": "comment.content",
+          "matched_pattern": "pii_email",
+          "excerpt": "lynn.ning@ttcadvisory.com"
+        }
+      ],
+      "remediation": "移除或替换为合成数据；如为示例/测试数据，添加 mock/synthetic 标注"
+    },
+    {
+      "check_id": "ext_real_write",
+      "check_name": "生产系统写操作信号",
+      "category": "external_action",
+      "status": "FAIL",
+      "description": "生产系统写操作信号，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "9137698c-659b-4832-9d74-9bb3bb6341e4",
+          "identifier": "LYN-76",
+          "field": "description",
+          "matched_pattern": "ext_real_write",
+          "excerpt": "真实业务试点、真实客户/候选人数据、外部触达、飞书/客户系统写入"
+        }
+      ],
+      "remediation": "外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控"
+    },
+    {
+      "check_id": "cand_pii_marker",
+      "check_name": "真实 PII 标记",
+      "category": "real_candidate",
+      "status": "FAIL",
+      "description": "真实 PII 标记",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "9137698c-659b-4832-9d74-9bb3bb6341e4",
+          "identifier": "LYN-76",
+          "field": "description",
+          "matched_pattern": "cand_pii_marker",
+          "excerpt": "真实候选人"
+        }
+      ],
+      "remediation": "替换为 synthetic 数据"
+    },
+    {
+      "check_id": "cand_non_synthetic",
+      "check_name": "非合成候选人数据（未标注 synthetic/mock/合成/匿名）",
+      "category": "real_candidate",
+      "status": "WARN",
+      "description": "包含\"候选人\"但未标注 synthetic/mock；需确认是否为真实数据",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "aa784c83-f0e6-4bc6-9103-dc6115138e6c",
+          "identifier": "LYN-76",
+          "field": "comment.content",
+          "matched_pattern": "cand_non_synthetic"
+        }
+      ],
+      "remediation": "确认数据为 synthetic/mock；添加 no_real_pii 标注"
+    },
+    {
+      "check_id": "ext_feishu_write",
+      "check_name": "飞书写入操作",
+      "category": "external_action",
+      "status": "FAIL",
+      "description": "飞书写入操作，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "bba9773c-a641-4b00-9231-9d961924c93b",
+          "identifier": "LYN-76",
+          "field": "comment.content",
+          "matched_pattern": "ext_feishu_write",
+          "excerpt": "写入飞书"
+        }
+      ],
+      "remediation": "外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控"
+    },
+    {
+      "check_id": "cand_non_synthetic",
+      "check_name": "非合成候选人数据（未标注 synthetic/mock/合成/匿名）",
+      "category": "real_candidate",
+      "status": "WARN",
+      "description": "包含\"候选人\"但未标注 synthetic/mock；需确认是否为真实数据",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "4ea542b5-679e-4a04-9143-3dc01b5ca5f3",
+          "identifier": "LYN-437",
+          "field": "description",
+          "matched_pattern": "cand_non_synthetic"
+        }
+      ],
+      "remediation": "确认数据为 synthetic/mock；添加 no_real_pii 标注"
+    },
+    {
+      "check_id": "cand_pii_marker",
+      "check_name": "真实 PII 标记",
+      "category": "real_candidate",
+      "status": "FAIL",
+      "description": "真实 PII 标记",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "4ea542b5-679e-4a04-9143-3dc01b5ca5f3",
+          "identifier": "LYN-437",
+          "field": "description",
+          "matched_pattern": "cand_pii_marker",
+          "excerpt": "真实候选人"
+        }
+      ],
+      "remediation": "替换为 synthetic 数据"
+    },
+    {
+      "check_id": "ext_client_visible",
+      "check_name": "客户可见内容外发",
+      "category": "external_action",
+      "status": "FAIL",
+      "description": "客户可见内容外发，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "9d30b52c-9727-4fdc-8ed8-73b1dd0bda9c",
+          "identifier": "LYN-1142",
+          "field": "description",
+          "matched_pattern": "ext_client_visible",
+          "excerpt": "客户可见"
+        }
+      ],
+      "remediation": "外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控"
+    },
+    {
+      "check_id": "cand_non_synthetic",
+      "check_name": "非合成候选人数据（未标注 synthetic/mock/合成/匿名）",
+      "category": "real_candidate",
+      "status": "WARN",
+      "description": "包含\"候选人\"但未标注 synthetic/mock；需确认是否为真实数据",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "9d30b52c-9727-4fdc-8ed8-73b1dd0bda9c",
+          "identifier": "LYN-1142",
+          "field": "description",
+          "matched_pattern": "cand_non_synthetic"
+        }
+      ],
+      "remediation": "确认数据为 synthetic/mock；添加 no_real_pii 标注"
+    },
+    {
+      "check_id": "ext_real_write",
+      "check_name": "生产系统写操作信号",
+      "category": "external_action",
+      "status": "FAIL",
+      "description": "生产系统写操作信号，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "9a5d8886-6e4c-4c3d-8b9d-4b7796c3a10d",
+          "identifier": "LYN-1142",
+          "field": "comment.content",
+          "matched_pattern": "ext_real_write",
+          "excerpt": "真实候选人/客户触达、客户可见推荐包、真实 API 写入"
+        }
+      ],
+      "remediation": "外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控"
+    },
+    {
+      "check_id": "cand_pii_marker",
+      "check_name": "真实 PII 标记",
+      "category": "real_candidate",
+      "status": "FAIL",
+      "description": "真实 PII 标记",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "9a5d8886-6e4c-4c3d-8b9d-4b7796c3a10d",
+          "identifier": "LYN-1142",
+          "field": "comment.content",
+          "matched_pattern": "cand_pii_marker",
+          "excerpt": "真实候选人"
+        }
+      ],
+      "remediation": "替换为 synthetic 数据"
+    },
+    {
+      "check_id": "cand_non_synthetic",
+      "check_name": "非合成候选人数据（未标注 synthetic/mock/合成/匿名）",
+      "category": "real_candidate",
+      "status": "WARN",
+      "description": "包含\"候选人\"但未标注 synthetic/mock；需确认是否为真实数据",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "632fa01f-c837-49b5-9c9f-05b8c016abc3",
+          "identifier": "LYN-1146",
+          "field": "description",
+          "matched_pattern": "cand_non_synthetic"
+        }
+      ],
+      "remediation": "确认数据为 synthetic/mock；添加 no_real_pii 标注"
+    },
+    {
+      "check_id": "cand_pii_marker",
+      "check_name": "真实 PII 标记",
+      "category": "real_candidate",
+      "status": "FAIL",
+      "description": "真实 PII 标记",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "632fa01f-c837-49b5-9c9f-05b8c016abc3",
+          "identifier": "LYN-1146",
+          "field": "description",
+          "matched_pattern": "cand_pii_marker",
+          "excerpt": "真实候选人"
+        }
+      ],
+      "remediation": "替换为 synthetic 数据"
+    },
+    {
+      "check_id": "ext_client_visible",
+      "check_name": "客户可见内容外发",
+      "category": "external_action",
+      "status": "FAIL",
+      "description": "客户可见内容外发，检测到 1 处匹配",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "a2d9c936-f465-4273-80cf-a9f4505cdb9f",
+          "identifier": "LYN-1146",
+          "field": "comment.content",
+          "matched_pattern": "ext_client_visible",
+          "excerpt": "客户可见"
+        }
+      ],
+      "remediation": "外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控"
+    },
+    {
+      "check_id": "cand_non_synthetic",
+      "check_name": "非合成候选人数据（未标注 synthetic/mock/合成/匿名）",
+      "category": "real_candidate",
+      "status": "WARN",
+      "description": "包含\"候选人\"但未标注 synthetic/mock；需确认是否为真实数据",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "8db4091d-b1da-4058-8a1e-6c70ab3a8102",
+          "identifier": "LYN-1150",
+          "field": "description",
+          "matched_pattern": "cand_non_synthetic"
+        }
+      ],
+      "remediation": "确认数据为 synthetic/mock；添加 no_real_pii 标注"
+    },
+    {
+      "check_id": "cand_pii_marker",
+      "check_name": "真实 PII 标记",
+      "category": "real_candidate",
+      "status": "FAIL",
+      "description": "真实 PII 标记",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "8db4091d-b1da-4058-8a1e-6c70ab3a8102",
+          "identifier": "LYN-1150",
+          "field": "description",
+          "matched_pattern": "cand_pii_marker",
+          "excerpt": "真实候选人"
+        }
+      ],
+      "remediation": "替换为 synthetic 数据"
+    }
+  ]
+}

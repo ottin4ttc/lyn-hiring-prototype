@@ -1,0 +1,161 @@
+{
+  "meta": {
+    "generated_at": "2026-05-17T16:11:49.771Z",
+    "dry_run": true,
+    "source": "multica-api",
+    "issues_scanned": 6,
+    "schema_version": "v1",
+    "warnings": [
+      "current_stage, next_20min, milestone_eta 均标为 manual_override=true，不可直接对外发布",
+      "此为 dry-run 输出，不写入任何外部系统"
+    ]
+  },
+  "manifest": {
+    "issue_count": {
+      "value": 6,
+      "source_ref": [
+        {
+          "type": "issue",
+          "field": "status",
+          "excerpt": "共扫描 6 条 issue，其中 6 条非取消"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "直接从 issue 状态统计，排除 cancelled"
+    },
+    "current_stage": {
+      "value": "23:45 CST pulse 已更新中枢。",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "20a2a128-8028-4b33-86f8-418f4e17e14b",
+          "identifier": "LYN-76",
+          "field": "content",
+          "excerpt": "23:45 CST pulse 已更新中枢。\n\n结论：主线继续健康，无新阻塞、不发飞书。本轮新增最小推进是创建 [LYN-1146](mention://issue/632fa01f-c837-49b5-9c9f-05b8c016abc3) 给 Reviewer，正式审核 [LYN-1142](me"
+        }
+      ],
+      "confidence": "MEDIUM",
+      "manual_override": true,
+      "auto_infer_forbidden": false,
+      "note": "来自进展中枢最新评论首句；必须人工确认后才能对外发布"
+    },
+    "done": {
+      "value": 2,
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "9d30b52c-9727-4fdc-8ed8-73b1dd0bda9c",
+          "identifier": "LYN-1142",
+          "field": "status",
+          "excerpt": "分析 Multica Agent Team Harness：支撑猎头系统自生长与工具沉淀"
+        },
+        {
+          "type": "issue",
+          "id": "632fa01f-c837-49b5-9c9f-05b8c016abc3",
+          "identifier": "LYN-1146",
+          "field": "status",
+          "excerpt": "Review LYN-1142 Agent Team Harness 方案"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=done 直接计数"
+    },
+    "doing": {
+      "value": 2,
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "9137698c-659b-4832-9d74-9bb3bb6341e4",
+          "identifier": "LYN-76",
+          "field": "status",
+          "excerpt": "LYN-36 进展中枢：Agent Native 猎头平台"
+        },
+        {
+          "type": "issue",
+          "id": "8db4091d-b1da-4058-8a1e-6c70ab3a8102",
+          "identifier": "LYN-1150",
+          "field": "status",
+          "excerpt": "Agent Team Harness dry-run 脚本/CLI 最小版"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=in_progress 直接计数"
+    },
+    "in_review": {
+      "value": 1,
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "22cd2a15-9893-4a4f-9177-3ac65dd3abf0",
+          "identifier": "LYN-36",
+          "field": "status",
+          "excerpt": "计划与愿景对齐：Agent Native 猎头平台总纲"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=in_review 直接计数"
+    },
+    "blocked": {
+      "value": 0,
+      "source_ref": [],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=blocked 直接计数"
+    },
+    "decision_needed": {
+      "value": 0,
+      "source_ref": [],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "未检测到明确决策需求信号"
+    },
+    "next_20min": {
+      "value": "只观察 [LYN-1146](mention://issue/632fa01f-c837-49b5-9c9f-05b8c016abc3) 审核结果：通过后再拆模板、dry-run 脚本、受控中国 AI 猎头 case；若需修改，则先退回 [LYN-1142](mention://issue/9d30b52c-9727-4fdc-8ed8-73b1dd0bda9c) 补充。进展页本轮轻量复验 `ht",
+      "source_ref": [
+        {
+          "type": "comment",
+          "id": "20a2a128-8028-4b33-86f8-418f4e17e14b",
+          "identifier": "LYN-76",
+          "field": "content",
+          "excerpt": "下一步只观察 [LYN-1146](mention://issue/632fa01f-c837-49b5-9c9f-05b8c016abc3) 审核结果：通过后再拆模板、dry-run 脚本、受控中国 AI 猎头 case；若需修改，则先退回 [LYN-1142](mention://issue/9"
+        }
+      ],
+      "confidence": "LOW",
+      "manual_override": true,
+      "auto_infer_forbidden": false,
+      "note": "从进展中枢最新评论提取\"下一步\"关键词后内容；仅供参考，必须人工确认"
+    },
+    "milestone_eta": {
+      "value": null,
+      "source_ref": [],
+      "confidence": "N/A",
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "note": "⛔ 禁止自动推断。Multica issue 不包含足够可信的时间预估字段；此字段必须由项目负责人手动填写。"
+    },
+    "updated_at": {
+      "value": "2026-05-17T16:11:49.771Z",
+      "source_ref": [
+        {
+          "type": "static",
+          "field": "script_run_time",
+          "excerpt": "脚本运行时间 2026-05-17T16:11:49.771Z"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "页面更新时间 = 脚本运行时间"
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lyn-hiring/harness/progress-manifest/v1",
+  "title": "ProgressManifest",
+  "description": "LYN-437 口径的 progress-manifest dry-run 输出。每个字段必须标注 source_ref、confidence、manual_override、auto_infer_forbidden。",
+  "type": "object",
+  "required": ["meta", "manifest"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["generated_at", "dry_run", "source", "issues_scanned"],
+      "properties": {
+        "generated_at": { "type": "string", "format": "date-time" },
+        "dry_run": { "type": "boolean", "const": true },
+        "source": { "type": "string", "enum": ["multica-api", "local-file", "stdin"] },
+        "issues_scanned": { "type": "integer" },
+        "schema_version": { "type": "string" },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "issue_count",
+        "current_stage",
+        "done",
+        "doing",
+        "blocked",
+        "decision_needed",
+        "next_20min",
+        "milestone_eta",
+        "updated_at"
+      ],
+      "properties": {
+        "issue_count": { "$ref": "#/definitions/ManifestField" },
+        "current_stage": { "$ref": "#/definitions/ManifestField" },
+        "done": { "$ref": "#/definitions/ManifestField" },
+        "doing": { "$ref": "#/definitions/ManifestField" },
+        "blocked": { "$ref": "#/definitions/ManifestField" },
+        "in_review": { "$ref": "#/definitions/ManifestField" },
+        "decision_needed": { "$ref": "#/definitions/ManifestField" },
+        "next_20min": { "$ref": "#/definitions/ManifestField" },
+        "milestone_eta": { "$ref": "#/definitions/ManifestField" },
+        "updated_at": { "$ref": "#/definitions/ManifestField" }
+      }
+    }
+  },
+  "definitions": {
+    "ManifestField": {
+      "type": "object",
+      "required": ["value", "source_ref", "confidence", "manual_override", "auto_infer_forbidden"],
+      "properties": {
+        "value": {
+          "description": "字段值；若 manual_override=true 且未经人工确认，此值为草稿，不可直接对外发布"
+        },
+        "source_ref": {
+          "type": "array",
+          "description": "数据来源：issue id / comment id / field name",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["issue", "comment", "label", "run", "static"] },
+              "id": { "type": "string" },
+              "identifier": { "type": "string" },
+              "field": { "type": "string" },
+              "excerpt": { "type": "string", "maxLength": 200 }
+            }
+          }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM", "LOW", "N/A"],
+          "description": "HIGH=可从 issue status/count 直接派生；MEDIUM=需要文本解析；LOW=推断/估算；N/A=无稳定来源"
+        },
+        "manual_override": {
+          "type": "boolean",
+          "description": "true=此字段结论不能自动确认，必须经过人工覆盖才能视为事实"
+        },
+        "auto_infer_forbidden": {
+          "type": "boolean",
+          "description": "true=此字段禁止任何形式自动推断，如 milestone 完成时间预测"
+        },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lyn-hiring/harness/privacy-check/v1",
+  "title": "PrivacyCheckReport",
+  "description": "隐私与外部触达风险检查报告。BLOCKED 时 progress-manifest 不得对外发布。",
+  "type": "object",
+  "required": ["meta", "summary", "checks"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "properties": {
+        "generated_at": { "type": "string", "format": "date-time" },
+        "dry_run": { "type": "boolean", "const": true },
+        "issues_scanned": { "type": "integer" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["risk_level", "recommendation"],
+      "properties": {
+        "risk_level": {
+          "type": "string",
+          "enum": ["CLEAR", "LOW", "MEDIUM", "HIGH", "BLOCKED"],
+          "description": "CLEAR=无风险；BLOCKED=有明确 PII 或不可控外部触达，必须人工处理后才能继续"
+        },
+        "recommendation": {
+          "type": "string",
+          "enum": ["continue", "review", "block"],
+          "description": "continue=可继续 dry-run；review=需要人工确认后继续；block=必须停止"
+        },
+        "pii_signals_count": { "type": "integer" },
+        "external_action_signals_count": { "type": "integer" },
+        "real_candidate_signals_count": { "type": "integer" }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/CheckItem" }
+    }
+  },
+  "definitions": {
+    "CheckItem": {
+      "type": "object",
+      "required": ["check_id", "check_name", "status", "source_ref"],
+      "properties": {
+        "check_id": { "type": "string" },
+        "check_name": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["pii", "external_action", "real_candidate", "internal_safety"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"]
+        },
+        "description": { "type": "string" },
+        "source_ref": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "id": { "type": "string" },
+              "identifier": { "type": "string" },
+              "field": { "type": "string" },
+              "matched_pattern": { "type": "string" },
+              "excerpt": { "type": "string", "maxLength": 200 }
+            }
+          }
+        },
+        "remediation": { "type": "string" }
+      }
+    }
+  }
+}
