@@ -1,0 +1,350 @@
+{
+  "meta": {
+    "generated_at": "2026-05-17T19:20:32.929Z",
+    "dry_run": true,
+    "source": "multica-api",
+    "issues_scanned": 36,
+    "schema_version": "v1",
+    "warnings": [
+      "current_stage, next_20min, milestone_eta 均标为 manual_override=true，不可直接对外发布",
+      "此为 dry-run 输出，不写入任何外部系统"
+    ]
+  },
+  "manifest": {
+    "issue_count": {
+      "value": 31,
+      "source_ref": [
+        {
+          "type": "issue",
+          "field": "status",
+          "excerpt": "共扫描 36 条 issue，其中 31 条非取消"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "直接从 issue 状态统计，排除 cancelled"
+    },
+    "current_stage": {
+      "value": "用途：作为 [LYN-36](mention://issue/22cd2a15-9893-4a4f-9177-3ac65dd3abf0) 的固定进展查看入口，避免关键信息散落在多个评论、autopil",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "9137698c-659b-4832-9d74-9bb3bb6341e4",
+          "identifier": "LYN-76",
+          "field": "description",
+          "excerpt": "用途：作为 [LYN-36](mention://issue/22cd2a15-9893-4a4f-9177-3ac65dd3abf0) 的固定进展查看入口，避免关键信息散落在多个评论、autopil"
+        }
+      ],
+      "confidence": "LOW",
+      "manual_override": true,
+      "auto_infer_forbidden": false,
+      "note": "从 issue description 提取，可信度低；必须人工覆盖"
+    },
+    "done": {
+      "value": 24,
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "8121cc45-4f94-4b4b-aad2-08680a3e0fad",
+          "identifier": "LYN-1175",
+          "field": "status",
+          "excerpt": "复验 LYN-1172：Harness 首轮 dry-run 汇合质量审核"
+        },
+        {
+          "type": "issue",
+          "id": "f47b24ef-d8f2-4dbe-a3c0-1343e98fc102",
+          "identifier": "LYN-1172",
+          "field": "status",
+          "excerpt": "Harness 首轮内部 dry-run：模板 + 受控 case + CLI 汇合"
+        },
+        {
+          "type": "issue",
+          "id": "1814c827-4781-4f6f-8e1c-f4253717c145",
+          "identifier": "LYN-1170",
+          "field": "status",
+          "excerpt": "复验 LYN-1150 第二次返修：dry-run CLI 收口"
+        },
+        {
+          "type": "issue",
+          "id": "e11c051d-e456-4b8c-883c-e0e1acbdec3b",
+          "identifier": "LYN-1166",
+          "field": "status",
+          "excerpt": "复验 LYN-1150 三项返修：dry-run CLI 收口"
+        },
+        {
+          "type": "issue",
+          "id": "b0f6fb16-2f6e-41a0-98e9-341bc2d0d3fb",
+          "identifier": "LYN-1160",
+          "field": "status",
+          "excerpt": "Review LYN-1149/1151/1157：Harness 下一阶段输入验收"
+        },
+        {
+          "type": "issue",
+          "id": "93d0d9a6-f543-47f2-91a0-6fe397e71141",
+          "identifier": "LYN-1155",
+          "field": "status",
+          "excerpt": "Review LYN-1150 Agent Team Harness dry-run CLI"
+        },
+        {
+          "type": "issue",
+          "id": "b56bc999-8dc9-46b3-8b72-7652e0ffa042",
+          "identifier": "LYN-1151",
+          "field": "status",
+          "excerpt": "受控中国 AI 猎头 case v0：FDE/解决方案架构师"
+        },
+        {
+          "type": "issue",
+          "id": "8db4091d-b1da-4058-8a1e-6c70ab3a8102",
+          "identifier": "LYN-1150",
+          "field": "status",
+          "excerpt": "Agent Team Harness dry-run 脚本/CLI 最小版"
+        },
+        {
+          "type": "issue",
+          "id": "03091131-27c5-4843-b4ee-060cb3a4f7ed",
+          "identifier": "LYN-1149",
+          "field": "status",
+          "excerpt": "Agent Team Harness 模板与 schema v0"
+        },
+        {
+          "type": "issue",
+          "id": "9d30b52c-9727-4fdc-8ed8-73b1dd0bda9c",
+          "identifier": "LYN-1142",
+          "field": "status",
+          "excerpt": "分析 Multica Agent Team Harness：支撑猎头系统自生长与工具沉淀"
+        },
+        {
+          "type": "issue",
+          "id": "36048d32-17b4-4011-8ff0-f7e8cb9dac21",
+          "identifier": "LYN-500",
+          "field": "status",
+          "excerpt": "固化 progress 3010 服务启动与静态资源恢复机制"
+        },
+        {
+          "type": "issue",
+          "id": "f74e47da-9f1e-4ab2-a372-7d0d94b09f39",
+          "identifier": "LYN-489",
+          "field": "status",
+          "excerpt": "修复进展页静态资源 400 导致样式未加载"
+        },
+        {
+          "type": "issue",
+          "id": "f21c6609-e08a-4c19-8b76-cd53d3f540ea",
+          "identifier": "LYN-217",
+          "field": "status",
+          "excerpt": "补绑定 LYN-36 项目 GitHub repo resource"
+        },
+        {
+          "type": "issue",
+          "id": "7051f2dc-e9ec-4a57-9b2f-8dcc5f194402",
+          "identifier": "LYN-117",
+          "field": "status",
+          "excerpt": "Review LYN-37：业务流程 v0.1 是否可解锁原型输入"
+        },
+        {
+          "type": "issue",
+          "id": "f3415e1c-37b5-426a-961a-9940a90af28d",
+          "identifier": "LYN-114",
+          "field": "status",
+          "excerpt": "GUI v0.2 文案风险微修：改为公开岗位画像抽象口径"
+        },
+        {
+          "type": "issue",
+          "id": "9ce4a3c3-c870-4d26-a5ee-47405d7e53c4",
+          "identifier": "LYN-109",
+          "field": "status",
+          "excerpt": "验收 GUI v0.2：LYN-37 状态机与评分证据 QA"
+        },
+        {
+          "type": "issue",
+          "id": "cac7687c-0256-4c80-8961-5912d785fb91",
+          "identifier": "LYN-101",
+          "field": "status",
+          "excerpt": "Simulation Lab GUI v0.2：接入 LYN-37 状态机与 fit_score"
+        },
+        {
+          "type": "issue",
+          "id": "51007c07-ef90-4e53-b462-2120f136e528",
+          "identifier": "LYN-95",
+          "field": "status",
+          "excerpt": "Simulation Lab GUI v0.1：扩展多 case 与全量 LYN-69 接入"
+        },
+        {
+          "type": "issue",
+          "id": "049124f5-269f-4419-8c8e-29268667bcdb",
+          "identifier": "LYN-90",
+          "field": "status",
+          "excerpt": "把 LYN-69 mock 数据接入 Simulation Lab GUI v0"
+        },
+        {
+          "type": "issue",
+          "id": "49829195-af9c-45bd-aa0d-b9fa8345ff17",
+          "identifier": "LYN-86",
+          "field": "status",
+          "excerpt": "排查并恢复 LYN-36 autopilot 每20分钟调度"
+        },
+        {
+          "type": "issue",
+          "id": "8742c4a0-d2da-4790-8498-9d6304748d4d",
+          "identifier": "LYN-72",
+          "field": "status",
+          "excerpt": "Agent Native 猎头团队自生长运行规则 v0"
+        },
+        {
+          "type": "issue",
+          "id": "286d9ac9-57a7-4cd2-a50a-b3b8499f3b5b",
+          "identifier": "LYN-70",
+          "field": "status",
+          "excerpt": "Agent Native Recruiting Simulation Lab GUI v0"
+        },
+        {
+          "type": "issue",
+          "id": "42397d6e-d64d-4716-af6e-8c4f7e4f8877",
+          "identifier": "LYN-69",
+          "field": "status",
+          "excerpt": "mock 客户需求与合成候选人画像数据规范 v0"
+        },
+        {
+          "type": "issue",
+          "id": "3899c6be-a2dc-4a73-a1ec-166c9fe19cf1",
+          "identifier": "LYN-68",
+          "field": "status",
+          "excerpt": "中国 AI 公司公开招聘信号样本池 v0"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=done 直接计数"
+    },
+    "doing": {
+      "value": 4,
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "c0be28ca-6acc-4e75-b00d-19b082cc56d2",
+          "identifier": "LYN-1181",
+          "field": "status",
+          "excerpt": "Tool-candidate 脚本完整化：从 run-messages 聚合重复动作候选"
+        },
+        {
+          "type": "issue",
+          "id": "0d039040-e2eb-4e24-b8b6-c9dc067f8e0c",
+          "identifier": "LYN-1180",
+          "field": "status",
+          "excerpt": "Privacy-check 改进：否定句过滤与 false-positive 样例"
+        },
+        {
+          "type": "issue",
+          "id": "9378aaf7-3128-4da8-b1c9-30087359d51e",
+          "identifier": "LYN-1179",
+          "field": "status",
+          "excerpt": "Harness CLI 在线模式：支持 --issues <parent-id> 读取 Multica issue 树"
+        },
+        {
+          "type": "issue",
+          "id": "9137698c-659b-4832-9d74-9bb3bb6341e4",
+          "identifier": "LYN-76",
+          "field": "status",
+          "excerpt": "LYN-36 进展中枢：Agent Native 猎头平台"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=in_progress 直接计数"
+    },
+    "in_review": {
+      "value": 2,
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "22cd2a15-9893-4a4f-9177-3ac65dd3abf0",
+          "identifier": "LYN-36",
+          "field": "status",
+          "excerpt": "计划与愿景对齐：Agent Native 猎头平台总纲"
+        },
+        {
+          "type": "issue",
+          "id": "43593848-6ae3-4b11-a6f3-a599bb5f66bd",
+          "identifier": "LYN-1164",
+          "field": "status",
+          "excerpt": "诊断 OpenClaw parseable output 失败：LYN-1150 返修 run"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=in_review 直接计数"
+    },
+    "blocked": {
+      "value": 0,
+      "source_ref": [],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "status=blocked 直接计数"
+    },
+    "decision_needed": {
+      "value": 0,
+      "source_ref": [],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "未检测到明确决策需求信号"
+    },
+    "next_20min": {
+      "value": "LYN-1181: Tool-candidate 脚本完整化：从 run-messages 聚合重复动作候选; LYN-1180: Privacy-check 改进：否定句过滤与 false-positive 样例; LYN-1179: Harness CLI 在线模式：支持 --issues <parent-id> 读取 Multic",
+      "source_ref": [
+        {
+          "type": "issue",
+          "id": "c0be28ca-6acc-4e75-b00d-19b082cc56d2",
+          "identifier": "LYN-1181",
+          "field": "status",
+          "excerpt": "Tool-candidate 脚本完整化：从 run-messages 聚合重复动作候选"
+        },
+        {
+          "type": "issue",
+          "id": "0d039040-e2eb-4e24-b8b6-c9dc067f8e0c",
+          "identifier": "LYN-1180",
+          "field": "status",
+          "excerpt": "Privacy-check 改进：否定句过滤与 false-positive 样例"
+        },
+        {
+          "type": "issue",
+          "id": "9378aaf7-3128-4da8-b1c9-30087359d51e",
+          "identifier": "LYN-1179",
+          "field": "status",
+          "excerpt": "Harness CLI 在线模式：支持 --issues <parent-id> 读取 Multica issue 树"
+        }
+      ],
+      "confidence": "LOW",
+      "manual_override": true,
+      "auto_infer_forbidden": false,
+      "note": "从 todo/in_progress 任务列表推断，不代表真实 Next 20min 计划；必须人工覆盖"
+    },
+    "milestone_eta": {
+      "value": null,
+      "source_ref": [],
+      "confidence": "N/A",
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "note": "⛔ 禁止自动推断。Multica issue 不包含足够可信的时间预估字段；此字段必须由项目负责人手动填写。"
+    },
+    "updated_at": {
+      "value": "2026-05-17T19:20:32.929Z",
+      "source_ref": [
+        {
+          "type": "static",
+          "field": "script_run_time",
+          "excerpt": "脚本运行时间 2026-05-17T19:20:32.929Z"
+        }
+      ],
+      "confidence": "HIGH",
+      "manual_override": false,
+      "auto_infer_forbidden": false,
+      "note": "页面更新时间 = 脚本运行时间"
+    }
+  }
+}

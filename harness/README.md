@@ -1,6 +1,6 @@
 # Agent Team Harness — Dry-run CLI 最小版
 
-> LYN-1150 交付物。所有命令保持 **dry-run**，不写飞书、候选人系统、外部 API。
+> LYN-1150 / LYN-1179 交付物。所有命令保持 **dry-run**，不写飞书、候选人系统、外部 API。
 
 ## 范围选择与取舍说明
 
@@ -18,16 +18,20 @@
 
 ```
 harness/
-├── README.md                    # 本文件
-├── harness-progress-manifest.js # progress-manifest dry-run CLI
-├── harness-privacy-check.js     # privacy-check dry-run CLI
-├── harness-tool-candidate.js    # tool-candidate dry-run CLI（骨架）
+├── README.md                         # 本文件
+├── harness-progress-manifest.js      # progress-manifest dry-run CLI（含在线模式）
+├── harness-privacy-check.js          # privacy-check dry-run CLI
+├── harness-tool-candidate.js         # tool-candidate dry-run CLI（骨架）
 ├── schemas/
-│   ├── progress-manifest.schema.json  # manifest 输出 schema
-│   └── privacy-check.schema.json      # privacy 报告 schema
+│   ├── progress-manifest.schema.json # manifest 输出 schema
+│   └── privacy-check.schema.json     # privacy 报告 schema
 └── examples/
-    ├── progress-manifest-sample.json  # LYN-36/76/1142/1146/437 dry-run 样例
-    └── privacy-check-sample.json      # 同一批 issue 隐私检查样例
+    ├── issues-input.json              # 离线 dry-run 用的本地样例输入
+    ├── progress-manifest-sample.json  # 离线 dry-run 样例输出
+    ├── progress-manifest-sample.md    # 离线 dry-run 样例 Markdown
+    ├── online-manifest-sample.json    # 在线模式（LYN-36 parent）样例 JSON 输出
+    ├── online-manifest-sample.md      # 在线模式（LYN-36 parent）样例 Markdown
+    └── privacy-check-sample.json      # 隐私检查样例
 ```
 
 ## 使用方法
@@ -35,20 +39,36 @@ harness/
 ### progress-manifest
 
 ```bash
-# 从 JSON 文件读取（离线模式，当前唯一支持的输入方式）
+# 离线模式：从 JSON 文件读取
 node harness/harness-progress-manifest.js \
   --input harness/examples/issues-input.json \
   --output json
 
-# 从 stdin 读取（离线模式）
+# 离线模式：从 stdin 读取
 cat harness/examples/issues-input.json | \
   node harness/harness-progress-manifest.js --input-stdin --output markdown
+
+# ✅ 在线只读模式：从 Multica 实时读取 parent issue 树（LYN-1179 新增）
+node harness/harness-progress-manifest.js \
+  --issues 22cd2a15-9893-4a4f-9177-3ac65dd3abf0 \
+  --output markdown
+
+# 等价写法：identifier 也可作为 parent-id（通过 multica issue get 解析）
+node harness/harness-progress-manifest.js \
+  --issues LYN-36 \
+  --output table
 
 # 完整参数
 node harness/harness-progress-manifest.js --help
 ```
 
-> ⚠️ **当前版本仅支持离线模式（`--input` / `--input-stdin`）。** `--issues`、`--parent`、`--status-filter` 等直接从 Multica 读取的参数**尚未实现**，请勿在下游依赖这些参数。如需在线读取，请先用 `multica issue list` 导出 JSON，再作为 `--input` 输入。
+> ✅ **在线模式（`--issues`）已实现（LYN-1179）。** 可直接从 Multica 读取 parent issue 下的所有子 issue 及其评论，生成等价的 progress-manifest 输出。
+>
+> **在线模式安全边界：**
+> - 只读：仅调用 `multica issue list` / `multica issue get` / `multica issue comment list`
+> - 不写入 Multica issue、评论、飞书、ATS/CRM 或任何外部系统
+> - 需要 `multica` CLI 已安装且已登录（运行 `multica workspace get` 验证）
+> - `--issues` 与 `--input` / `--input-stdin` 互斥；若同时指定，报错退出
 
 ### privacy-check
 
@@ -63,7 +83,7 @@ node harness/harness-privacy-check.js \
   --output json
 ```
 
-> ⚠️ **当前版本仅支持离线模式（`--input` / `--input-stdin`）。** `--issues` 直接读取 Multica issue 的参数**尚未实现**。
+> ℹ️ `privacy-check` 当前支持离线模式（`--input` / `--input-stdin`）。在线 `--issues` 模式已在 `harness-progress-manifest.js` 实现（LYN-1179）；`harness-privacy-check.js` 尚未集成在线拉取，如需在线检查，可先用 `--issues` 生成 manifest JSON 后再进行检查。
 
 ## 输入格式
 
@@ -73,11 +93,10 @@ node harness/harness-privacy-check.js \
 |---|---|---|---|
 | `--input` | path | ✅ 已实现 | 本地 JSON 文件（issue 数组，见 schema）|
 | `--input-stdin` | flag | ✅ 已实现 | 从 stdin 读取 JSON |
-| `--schema` | path | ⛔ 未实现 | 覆盖默认 schema 路径 — parser 中无此参数，当前不支持；schema 路径在脚本内硬编码 |
+| `--issues <parent-id>` | string | ✅ 已实现（LYN-1179）| 在线只读模式：UUID 或 identifier，读取 parent 下的 issue 树 |
 | `--output` | enum | ✅ 已实现 | `json`（默认）\| `markdown` \| `table` |
-| `--dry-run` | flag | ⛔ 未实现 | parser 中无此 flag；所有运行默认已是 dry-run，无需显式传入，传入不报错但不生效 |
-| `--issues` | string | ⛔ 未实现 | 逗号分隔的 issue identifier（如 LYN-36,LYN-76）— 当前不支持在线读取 |
-| `--parent` | string | ⛔ 未实现 | 父 issue id，只处理其子任务 — 当前不支持在线读取 |
+| `--dry-run` | flag | ⛔ 未实现 | parser 中无此 flag；所有运行默认已是 dry-run，无需显式传入 |
+| `--schema` | path | ⛔ 未实现 | 覆盖默认 schema 路径 — schema 路径在脚本内硬编码 |
 | `--status-filter` | string | ⛔ 未实现 | 只处理指定状态（todo,in_progress,done 等）— 当前不支持在线过滤 |
 
 ### Issue 输入 JSON schema（最小字段）

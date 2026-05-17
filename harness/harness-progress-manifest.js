@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * harness-progress-manifest.js
- * LYN-1150: Agent Team Harness dry-run — progress-manifest 生成器
+ * LYN-1150 / LYN-1179: Agent Team Harness dry-run — progress-manifest 生成器
  *
  * 符合 LYN-437 验收口径：
  * - 5 列输出：指标名称 | 来源 | 可信度 | 人工覆盖 | 禁止自动推断
@@ -12,6 +12,13 @@
  * Usage:
  *   node harness-progress-manifest.js --input <json-file> [--output json|markdown|table]
  *   cat issues.json | node harness-progress-manifest.js --input-stdin [--output markdown]
+ *   node harness-progress-manifest.js --issues <parent-id> [--output json|markdown|table]
+ *
+ * 在线模式（--issues）：
+ *   - 只读：从 Multica issue 树拉取 parent 下所有子 issue 及其评论
+ *   - 不写入 Multica、飞书、ATS/CRM 或任何外部系统
+ *   - 需要 multica CLI 已安装且已登录（multica workspace get 可正常执行）
+ *   - 与 --input / --input-stdin 互斥；--issues 优先级最低，若同时指定 --input 则报错
  */
 
 'use strict';
@@ -19,12 +26,14 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { execSync } = require('child_process');
 
 // ─── CLI arg parsing ────────────────────────────────────────────────────────
 function parseArgs(argv) {
   const args = {
     input: null,
     inputStdin: false,
+    issues: null,      // --issues <parent-id> : 在线只读模式
     output: 'json',
     help: false,
   };
@@ -33,6 +42,7 @@ function parseArgs(argv) {
     if (a === '--help' || a === '-h') { args.help = true; }
     else if (a === '--input' && argv[i + 1]) { args.input = argv[++i]; }
     else if (a === '--input-stdin') { args.inputStdin = true; }
+    else if ((a === '--issues' || a === '--parent') && argv[i + 1]) { args.issues = argv[++i]; }
     else if (a === '--output' && argv[i + 1]) { args.output = argv[++i]; }
   }
   return args;
@@ -40,13 +50,23 @@ function parseArgs(argv) {
 
 function printHelp() {
   console.log(`
-harness-progress-manifest.js — LYN-1150 dry-run CLI
+harness-progress-manifest.js — LYN-1150/LYN-1179 dry-run CLI
 
 Options:
-  --input <path>      读取 issue JSON 文件（见 README 输入格式）
-  --input-stdin       从 stdin 读取 JSON
-  --output <format>   输出格式：json（默认）| markdown | table
-  --help              显示帮助
+  --input <path>        读取 issue JSON 文件（离线模式，见 README 输入格式）
+  --input-stdin         从 stdin 读取 JSON（离线模式）
+  --issues <parent-id>  从 Multica 在线读取指定 parent issue 下的所有子 issue（只读模式）
+                        parent-id 可为 UUID（如 22cd2a15-...）或 issue identifier（如 LYN-36）
+  --output <format>     输出格式：json（默认）| markdown | table
+  --help                显示帮助
+
+优先级（互斥）：--input / --input-stdin 优先；如果同时指定 --issues 和 --input，报错退出。
+
+在线模式（--issues）安全边界：
+  - 只读：仅调用 multica issue list / multica issue comment list
+  - 不写入 Multica issue、评论、飞书、ATS/CRM 或任何外部系统
+  - 需要 multica CLI 已安装（PATH 中可访问）且已登录
+  - synthetic/no_real_pii 边界同离线模式，受 privacy-check 前置
 
 输出格式（符合 LYN-437 验收口径，5 列）：
   指标/区块名称 | 来源 issue/comment | 自动生成可信度 | 人工覆盖字段 | 禁止自动推断
@@ -57,6 +77,84 @@ Options:
   - current_stage / next_20min 标为 manual_override=true
 `);
 }
+
+// ─── Online fetch (--issues mode) ───────────────────────────────────────────────────────────────
+
+/**
+ * 运行 multica CLI 命令并返回解析后的 JSON。
+ * 只读：不将任何写入操作封装在此。
+ */
+function multicaRead(args) {
+  const cmd = `multica ${args} --output json`;
+  try {
+    const stdout = execSync(cmd, { encoding: 'utf8', timeout: 30000 });
+    return JSON.parse(stdout);
+  } catch (err) {
+    const msg = err.stderr ? err.stderr.toString().slice(0, 200) : err.message;
+    throw new Error(`multica 命令失败 [${cmd}]: ${msg}`);
+  }
+}
+
+/**
+ * 从 Multica 在线拉取 parent issue 下的所有子 issue（包含 parent 本身）及其评论。
+ * 只读：仅调用 issue list / issue get / issue comment list。
+ */
+function fetchIssueTree(parentId) {
+  process.stderr.write(`[online] 读取 parent issue: ${parentId}\n`);
+
+  // 1. 获取 parent issue 本身
+  let parentIssue;
+  try {
+    parentIssue = multicaRead(`issue get ${parentId}`);
+  } catch (err) {
+    throw new Error(`无法获取 parent issue "${parentId}": ${err.message}`);
+  }
+
+  // 2. 列出 parent 的子 issue（分页处理，防止超过默认 50 条限制）
+  //    multica issue list 不支持 --parent 过滤，改为拉全量后在 JS 侧按 parent_issue_id 过滤
+  let children = [];
+  let offset = 0;
+  const limit = 50;
+  while (true) {
+    const page = multicaRead(`issue list --limit ${limit} --offset ${offset}`);
+    const items = Array.isArray(page) ? page : (page.issues || []);
+    // 筛选出直接子 issue
+    const childItems = items.filter((i) => i.parent_issue_id === parentIssue.id);
+    children = children.concat(childItems);
+    const hasMore = Array.isArray(page) ? items.length === limit : page.has_more;
+    if (!hasMore || items.length === 0) break;
+    offset += limit;
+  }
+  process.stderr.write(`[online] 找到 ${children.length} 个子 issue\n`);
+
+  // 3. 对每个 issue（parent + children）获取评论
+  const allIssues = [parentIssue, ...children];
+  for (const issue of allIssues) {
+    try {
+      process.stderr.write(`[online] 读取评论: ${issue.identifier || issue.id}\n`);
+      const commentsResult = multicaRead(`issue comment list ${issue.id}`);
+      issue.comments = Array.isArray(commentsResult)
+        ? commentsResult
+        : (commentsResult.comments || []);
+    } catch (_err) {
+      // 评论获取失败时降级处理，不中断整个处理流程
+      issue.comments = [];
+    }
+  }
+
+  // 4. 构造与离线模式相同的 data 结构
+  return {
+    issues: allIssues,
+    meta: {
+      generated_at: new Date().toISOString(),
+      source: 'multica-api',
+      dry_run: true,
+      parent_id: parentIssue.id,
+      parent_identifier: parentIssue.identifier,
+    },
+  };
+}
+
 
 // ─── Status counters ─────────────────────────────────────────────────────────
 const STATUS_MAP = {
@@ -460,38 +558,58 @@ async function main() {
     process.exit(0);
   }
 
-  let rawData;
-  try {
-    if (args.inputStdin) {
-      rawData = await readStdin();
-    } else if (args.input) {
-      rawData = fs.readFileSync(path.resolve(args.input), 'utf8');
-    } else {
-      // Use built-in sample data for demo
-      const samplePath = path.join(__dirname, 'examples', 'issues-input.json');
-      if (fs.existsSync(samplePath)) {
-        rawData = fs.readFileSync(samplePath, 'utf8');
-      } else {
-        console.error('Error: 请提供 --input <file> 或 --input-stdin，或创建 examples/issues-input.json\n');
-        printHelp();
-        process.exit(1);
-      }
-    }
-  } catch (err) {
-    console.error('Error reading input:', err.message);
+  // ─── 互斥检查 ───────────────────────────────────────────────────────────────
+  const inputCount = [args.input, args.inputStdin, args.issues].filter(Boolean).length;
+  if (inputCount > 1) {
+    console.error('Error: --input、--input-stdin、--issues 互斥，只能指定其中一个。');
     process.exit(1);
   }
 
   let data;
-  try {
-    data = JSON.parse(rawData);
-    // Support array input as well
-    if (Array.isArray(data)) {
-      data = { issues: data, meta: { source: 'local-file', dry_run: true } };
+
+  // ─── 在线模式：--issues <parent-id> ─────────────────────────────────────────
+  if (args.issues) {
+    try {
+      data = fetchIssueTree(args.issues);
+    } catch (err) {
+      console.error(`Error (online mode): ${err.message}`);
+      console.error('请确认 multica CLI 已安装（multica --version）且已登录（multica workspace get）。');
+      process.exit(1);
     }
-  } catch (err) {
-    console.error('Error parsing JSON:', err.message);
-    process.exit(1);
+  } else {
+    // ─── 离线模式：--input / --input-stdin ──────────────────────────────────────
+    let rawData;
+    try {
+      if (args.inputStdin) {
+        rawData = await readStdin();
+      } else if (args.input) {
+        rawData = fs.readFileSync(path.resolve(args.input), 'utf8');
+      } else {
+        // Use built-in sample data for demo
+        const samplePath = path.join(__dirname, 'examples', 'issues-input.json');
+        if (fs.existsSync(samplePath)) {
+          rawData = fs.readFileSync(samplePath, 'utf8');
+        } else {
+          console.error('Error: 请提供 --input <file>、--input-stdin 或 --issues <parent-id>，或创建 examples/issues-input.json\n');
+          printHelp();
+          process.exit(1);
+        }
+      }
+    } catch (err) {
+      console.error('Error reading input:', err.message);
+      process.exit(1);
+    }
+
+    try {
+      data = JSON.parse(rawData);
+      // Support array input as well
+      if (Array.isArray(data)) {
+        data = { issues: data, meta: { source: 'local-file', dry_run: true } };
+      }
+    } catch (err) {
+      console.error('Error parsing JSON:', err.message);
+      process.exit(1);
+    }
   }
 
   const result = buildManifest(data);
