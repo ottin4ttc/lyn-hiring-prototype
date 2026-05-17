@@ -1,0 +1,65 @@
+{
+  "meta": {
+    "description": "LYN-1180: false-positive 样例集 — 3 条 guardrail-mention + 2 条 actual-risk",
+    "note": "所有数据均为合成/匿名数据，no_real_pii",
+    "generated_at": "2026-05-17T00:00:00Z",
+    "dry_run": true
+  },
+  "examples": [
+    {
+      "id": "fp-001",
+      "type": "guardrail-mention",
+      "label": "🟢 边界声明：禁止飞书写入",
+      "text": "本 harness 处于 dry-run 模式，禁止写入飞书、禁止向候选人发送任何消息、禁止真实候选人数据进入系统。所有操作仅限沙盒环境。",
+      "expected_classification": "guardrail-mention",
+      "expected_status": "WARN",
+      "expected_risk_level": "LOW",
+      "why_false_positive": "文本描述的是禁止规则本身（'禁止写入飞书'），而非实际执行飞书写入操作。前缀'禁止'明确标识这是边界声明。",
+      "triggers": ["写入飞书", "真实候选人", "候选人"]
+    },
+    {
+      "id": "fp-002",
+      "type": "guardrail-mention",
+      "label": "🟢 边界声明：说明'真实候选人'不可使用",
+      "text": "验收标准：不接入真实候选人数据，不触达真实候选人，不写入任何外部系统（飞书/CRM/ATS）。测试数据必须使用 synthetic 合成样本。",
+      "expected_classification": "guardrail-mention",
+      "expected_status": "WARN",
+      "expected_risk_level": "LOW",
+      "why_false_positive": "出现了'真实候选人'字样，但处于'不接入/不触达'的否定语境中。这是对安全边界的明确描述，不是实际违规。",
+      "triggers": ["真实候选人", "不接入", "不触达", "不写入"]
+    },
+    {
+      "id": "fp-003",
+      "type": "guardrail-mention",
+      "label": "🟢 边界声明：移除说明（提及'真实邮箱'是为了说明不能用）",
+      "text": "请移除以下字段以保护隐私：不得包含真实邮箱、不得包含真实候选人姓名、不得出现候选人联系方式。如果确认内容仅为 synthetic 数据，可添加 no_real_pii 标注后继续。",
+      "expected_classification": "guardrail-mention",
+      "expected_status": "WARN",
+      "expected_risk_level": "LOW",
+      "why_false_positive": "提到了'真实邮箱'和'候选人联系方式'，但语境是'不得包含'的否定式要求，是关于如何避免违规的说明文字，不是实际违规内容。",
+      "triggers": ["候选人", "联系"]
+    },
+    {
+      "id": "ar-001",
+      "type": "actual-risk",
+      "label": "🔴 actual-risk：真实手机号出现在内容中",
+      "text": "候选人王某的手机号是 13812345678，请猎头团队直接联系。面试安排已发至其邮箱 candidate@realmail.com。",
+      "expected_classification": "actual-risk",
+      "expected_status": "FAIL",
+      "expected_risk_level": "BLOCKED",
+      "why_actual_risk": "手机号 13812345678 是真实格式的 PII，邮件地址 candidate@realmail.com 也是实际邮箱（非 example/test 域名）。两者都需立即清除或替换为 synthetic 数据。",
+      "triggers": ["13812345678", "candidate@realmail.com"]
+    },
+    {
+      "id": "ar-002",
+      "type": "actual-risk",
+      "label": "🔴 actual-risk：实际执行飞书写入",
+      "text": "已完成候选人评估，现在写入飞书文档 ID doc-xxx-001，同时给客户发送推荐包，客户可见内容如下：候选人 A 技术评分 8/10。",
+      "expected_classification": "actual-risk",
+      "expected_status": "FAIL",
+      "expected_risk_level": "BLOCKED",
+      "why_actual_risk": "文本描述了正在执行的飞书写入（'写入飞书文档'）和客户可见内容外发（'给客户发送推荐包'），是实际违规行为，不是禁止声明。",
+      "triggers": ["写入飞书", "客户可见", "候选人"]
+    }
+  ]
+}
