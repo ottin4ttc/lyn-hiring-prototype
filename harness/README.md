@@ -35,47 +35,50 @@ harness/
 ### progress-manifest
 
 ```bash
-# 基础用法（从 multica issue list 生成 manifest）
-node harness/harness-progress-manifest.js \
-  --issues LYN-36,LYN-76,LYN-1142,LYN-1146,LYN-437 \
-  --output json
-
-# 从 JSON 文件读取（离线模式）
+# 从 JSON 文件读取（离线模式，当前唯一支持的输入方式）
 node harness/harness-progress-manifest.js \
   --input harness/examples/issues-input.json \
-  --output markdown
+  --output json
+
+# 从 stdin 读取（离线模式）
+cat harness/examples/issues-input.json | \
+  node harness/harness-progress-manifest.js --input-stdin --output markdown
 
 # 完整参数
 node harness/harness-progress-manifest.js --help
 ```
 
+> ⚠️ **当前版本仅支持离线模式（`--input` / `--input-stdin`）。** `--issues`、`--parent`、`--status-filter` 等直接从 Multica 读取的参数**尚未实现**，请勿在下游依赖这些参数。如需在线读取，请先用 `multica issue list` 导出 JSON，再作为 `--input` 输入。
+
 ### privacy-check
 
 ```bash
-# 检查一批 issue 是否包含 PII 或外部触达风险
-node harness/harness-privacy-check.js \
-  --issues LYN-36,LYN-76,LYN-1142,LYN-1146,LYN-437 \
-  --output json
-
-# 检查单条 issue 内容（从 stdin）
+# 检查单条 issue 内容（从 stdin，当前推荐方式）
 echo '{"title":"测试","description":"候选人李某"}' | \
   node harness/harness-privacy-check.js --input-stdin --output markdown
+
+# 从 JSON 文件读取（离线模式）
+node harness/harness-privacy-check.js \
+  --input harness/examples/issues-input.json \
+  --output json
 ```
+
+> ⚠️ **当前版本仅支持离线模式（`--input` / `--input-stdin`）。** `--issues` 直接读取 Multica issue 的参数**尚未实现**。
 
 ## 输入格式
 
 ### CLI 参数
 
-| 参数 | 类型 | 说明 |
-|---|---|---|
-| `--issues` | string | 逗号分隔的 issue identifier（如 LYN-36,LYN-76）|
-| `--input` | path | 本地 JSON 文件（issue 数组，见 schema）|
-| `--input-stdin` | flag | 从 stdin 读取 JSON |
-| `--parent` | string | 父 issue id，只处理其子任务 |
-| `--status-filter` | string | 只处理指定状态（todo,in_progress,done 等）|
-| `--schema` | path | 覆盖默认 schema 路径 |
-| `--output` | enum | `json`（默认）\| `markdown` \| `table` |
-| `--dry-run` | flag | 显式标注 dry-run（默认已是）|
+| 参数 | 类型 | 实现状态 | 说明 |
+|---|---|---|---|
+| `--input` | path | ✅ 已实现 | 本地 JSON 文件（issue 数组，见 schema）|
+| `--input-stdin` | flag | ✅ 已实现 | 从 stdin 读取 JSON |
+| `--schema` | path | ✅ 已实现 | 覆盖默认 schema 路径 |
+| `--output` | enum | ✅ 已实现 | `json`（默认）\| `markdown` \| `table` |
+| `--dry-run` | flag | ✅ 已实现 | 显式标注 dry-run（默认已是）|
+| `--issues` | string | ⛔ 未实现 | 逗号分隔的 issue identifier（如 LYN-36,LYN-76）— 当前不支持在线读取 |
+| `--parent` | string | ⛔ 未实现 | 父 issue id，只处理其子任务 — 当前不支持在线读取 |
+| `--status-filter` | string | ⛔ 未实现 | 只处理指定状态（todo,in_progress,done 等）— 当前不支持在线过滤 |
 
 ### Issue 输入 JSON schema（最小字段）
 
@@ -133,6 +136,20 @@ echo '{"title":"测试","description":"候选人李某"}' | \
 | `real_candidate_signals` | 真实候选人数据风险 |
 | `recommendation` | 建议动作（continue / review / block）|
 | `source_ref` | 触发警告的字段和内容摘要 |
+
+## privacy-check exit code 说明
+
+`harness-privacy-check.js` 返回的 `risk_level` 含义如下：
+
+| risk_level | exit code | 含义 | 建议动作 |
+|---|---|---|---|
+| `CLEAR` | 0 | 未检测到任何 PII 或外部触达风险信号 | 可继续 |
+| `LOW` | 0 | 低风险，可能是误报 | 人工确认后可继续 |
+| `MEDIUM` | 1 | 中等风险，有可疑模式但非确定性违规 | 需要人工审核 |
+| `HIGH` | 1 | 高风险，检测到明确的 PII 或外部触达信号 | 必须人工介入 |
+| `BLOCKED` | 2 | **描述性红线触发**，匹配到"真实候选人"、真实邮箱、真实外部系统等语义模式 | 需要人工确认是否为真实违规或误判 |
+
+> ⚠️ **`BLOCKED` ≠ 已发生真实违规。** `BLOCKED` 表示检测到描述性红线触发（如内容中出现"真实候选人"、邮箱地址等语义信号），需要**人工确认**是否确实存在 PII 或违规动作。常见的 false positive 包括：issue 讨论中明确说"禁止使用真实候选人"、"移除真实邮箱"等负向描述，也会匹配到同一规则。`BLOCKED` 的正确处理流程是：人工阅读 `source_ref` 中的 `excerpt` 字段，判断是否为实际风险，再决定是否继续。
 
 ## 安全边界
 
