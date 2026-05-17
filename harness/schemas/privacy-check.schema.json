@@ -21,7 +21,7 @@
         "risk_level": {
           "type": "string",
           "enum": ["CLEAR", "LOW", "MEDIUM", "HIGH", "BLOCKED"],
-          "description": "CLEAR=无风险；BLOCKED=有明确 PII 或不可控外部触达，必须人工处理后才能继续"
+          "description": "CLEAR=无风险；LOW=仅 WARN/guardrail-mention；BLOCKED=有 actual-risk PII、真实候选人数据、外部触达或真实系统写入 FAIL，必须人工处理后才能继续"
         },
         "recommendation": {
           "type": "string",
@@ -30,7 +30,15 @@
         },
         "pii_signals_count": { "type": "integer" },
         "external_action_signals_count": { "type": "integer" },
-        "real_candidate_signals_count": { "type": "integer" }
+        "real_candidate_signals_count": { "type": "integer" },
+        "actual_risk_count": {
+          "type": "integer",
+          "description": "需要立即处理的 actual-risk FAIL 信号数量"
+        },
+        "guardrail_mention_count": {
+          "type": "integer",
+          "description": "识别为否定/边界描述的 guardrail-mention 信号数量（常见 false-positive）"
+        }
       }
     },
     "checks": {
@@ -49,11 +57,29 @@
           "type": "string",
           "enum": ["pii", "external_action", "real_candidate", "internal_safety"]
         },
+        "classification": {
+          "type": "string",
+          "enum": ["actual-risk", "guardrail-mention"],
+          "description": "actual-risk=实际 PII/外部触达行为；guardrail-mention=否定/禁止/边界声明，常见 false-positive 来源"
+        },
         "status": {
           "type": "string",
           "enum": ["PASS", "WARN", "FAIL"]
         },
         "description": { "type": "string" },
+        "raw_signals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "规则匹配到的原始字符串（最多 2 条）"
+        },
+        "judgment_reason": {
+          "type": "string",
+          "description": "判定为 actual-risk 或 guardrail-mention 的理由"
+        },
+        "human_review": {
+          "type": "string",
+          "description": "针对当前分类的人工复核建议"
+        },
         "source_ref": {
           "type": "array",
           "items": {

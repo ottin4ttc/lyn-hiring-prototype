@@ -2,6 +2,7 @@
 /**
  * harness-privacy-check.js
  * LYN-1150: Agent Team Harness dry-run — privacy-check CLI
+ * LYN-1180: 否定句过滤与 false-positive 分类改进
  *
  * 检查 issue/comment 内容是否包含：
  * 1. 真实 PII（姓名、手机、邮件、身份证、地址、真实简历内容）
@@ -11,8 +12,74 @@
  * 输出：CLEAR / LOW / MEDIUM / HIGH / BLOCKED
  * BLOCKED = 有明确 PII 或不可控外部触达，必须人工处理后才能继续
  *
+ * 信号分类（LYN-1180 新增）：
+ *   actual-risk     = 实际 PII/外部触达行为（需要立即处理）
+ *   guardrail-mention = 守护边界描述（规则文字、禁止条款、否定声明）— 常见 false-positive 来源
+ *
  * dry-run only：不写任何外部系统
  */
+
+// ─── Negation / Guardrail Prefix Detection ──────────────────────────────────
+//
+// 判断一段 excerpt 是否处于否定语境中（即描述"禁止"或"不允许"某动作，
+// 而非实际执行该动作）。
+// 匹配前缀：禁止 / 不得 / 未 / 无 / 不接入 / 不触达 / 不写入 / 严禁 / 拒绝 / 不可 / 防止
+// 以及英文对应：no / not / never / prevent / block / deny / prohibit / disallow
+//
+// 如果在 match 位置之前 0..40 个字符内出现这些前缀，判断为 guardrail-mention。
+
+const NEGATION_PREFIXES_ZH = [
+  '禁止', '不得', '未', '无', '不接入', '不触达', '不写入', '严禁', '拒绝',
+  '不可', '防止', '不允许', '移除', '不发', '不运行', '不操作', '不对外', '不外发',
+  '仅 dry-run', '仅dry-run', 'dry-run only', '不应', '不会', '确保不',
+  '不采集', '不存储', '不发送', '不进行',
+];
+
+const NEGATION_PREFIXES_EN = [
+  'no ', 'not ', 'never ', 'prevent ', 'block ', 'deny ', 'prohibit ',
+  'disallow ', 'disabled', 'blocked', 'guardrail', 'must not', 'do not',
+  'should not', 'cannot', 'won\'t', 'avoid',
+];
+
+/**
+ * 从原文 text 中提取匹配位置的上下文（前 contextBefore 字符 + 后 contextAfter 字符）
+ * @param {string} text
+ * @param {number} matchIndex  匹配起始位置
+ * @param {string} matchStr
+ * @param {number} contextBefore
+ * @param {number} contextAfter
+ * @returns {string}
+ */
+function extractExcerpt(text, matchIndex, matchStr, contextBefore = 40, contextAfter = 60) {
+  const start = Math.max(0, matchIndex - contextBefore);
+  const end = Math.min(text.length, matchIndex + matchStr.length + contextAfter);
+  const excerpt = text.slice(start, end);
+  return (start > 0 ? '…' : '') + excerpt + (end < text.length ? '…' : '');
+}
+
+/**
+ * 判断 match 是否在否定语境中（是否为 guardrail-mention）
+ * @param {string} text   完整原文
+ * @param {number} matchIndex  match 在 text 中的位置
+ * @param {string} matchStr    匹配到的字符串
+ * @returns {'actual-risk' | 'guardrail-mention'}
+ */
+function classifySignal(text, matchIndex, matchStr) {
+  // 取 match 之前 60 字符的上下文（跨行也考虑）
+  const contextStart = Math.max(0, matchIndex - 60);
+  const context = text.slice(contextStart, matchIndex + matchStr.length + 20);
+
+  const lower = context.toLowerCase();
+
+  for (const prefix of NEGATION_PREFIXES_ZH) {
+    if (context.includes(prefix)) return 'guardrail-mention';
+  }
+  for (const prefix of NEGATION_PREFIXES_EN) {
+    if (lower.includes(prefix)) return 'guardrail-mention';
+  }
+
+  return 'actual-risk';
+}
 
 'use strict';
 
@@ -21,39 +88,52 @@ const path = require('path');
 const readline = require('readline');
 
 // ─── PII Detection Rules ────────────────────────────────────────────────────
+// noNegationCheck: true = 即使处于否定上下文也判为 actual-risk（如真实手机号、邮箱本身不因否定消失）
 const PII_PATTERNS = [
   {
     id: 'pii_cn_mobile',
     name: '中国手机号',
     pattern: /(?<!\d)(1[3-9]\d{9})(?!\d)/g,
     severity: 'HIGH',
+    noNegationCheck: true, // 手机号本身是真实 PII，无论上下文如何
   },
   {
     id: 'pii_cn_id',
     name: '中国身份证号',
     pattern: /(?<!\d)\d{17}[\dXx](?!\d)/g,
     severity: 'HIGH',
+    noNegationCheck: true,
   },
   {
     id: 'pii_email',
     name: '邮箱地址',
     // Exclude common example domains and placeholder patterns
     pattern: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
-    severity: 'MEDIUM',
+    severity: 'HIGH',
     filter: (match) => !match.includes('example.') && !match.includes('test.') && !match.includes('mock.'),
+    noNegationCheck: true, // 邮箱本身是 PII，即使说"不发邮件"出现真实邮箱仍是风险
+  },
+  {
+    id: 'pii_open_id',
+    name: '飞书 open_id（可能关联真实用户）',
+    pattern: /\b(?:ou|on|oc)_[a-zA-Z0-9]{12,}\b/g,
+    severity: 'HIGH',
+    noNegationCheck: true,
   },
   {
     id: 'pii_real_name_pattern',
     name: '疑似真实中文姓名',
     // Heuristic: 候选人 + 2-4 Chinese chars that look like names
     pattern: /候选人[\u4e00-\u9fa5]{2,4}(?:[先生女士]|的|已|曾|在)/g,
-    severity: 'MEDIUM',
+    severity: 'HIGH',
+    // 允许否定分类 — "候选人张三" 可能是举例说"禁止使用候选人张三的数据"
   },
   {
     id: 'pii_linkedin_url',
     name: 'LinkedIn 个人主页（可能含真实个人信息）',
     pattern: /linkedin\.com\/in\/[a-zA-Z0-9\-_]+/g,
-    severity: 'MEDIUM',
+    severity: 'HIGH',
+    noNegationCheck: true,
   },
   {
     id: 'pii_resume_content',
@@ -65,6 +145,7 @@ const PII_PATTERNS = [
 ];
 
 // ─── External Action Rules ──────────────────────────────────────────────────
+// 外部触达规则允许否定分类："禁止写入飞书" != "正在写入飞书"
 const EXTERNAL_ACTION_PATTERNS = [
   {
     id: 'ext_feishu_write',
@@ -100,28 +181,56 @@ const EXTERNAL_ACTION_PATTERNS = [
 ];
 
 // ─── Real Candidate Data Rules ───────────────────────────────────────────────
+const CANDIDATE_REF_PATTERN = /候选人|\bcandidate\s+(?:data|profile|resume|contact|name|phone|email|record|records|assessment|evaluation|shortlist)\b/i;
+
 const REAL_CANDIDATE_PATTERNS = [
   {
     id: 'cand_non_synthetic',
     name: '非合成候选人数据（未标注 synthetic/mock/合成/匿名）',
     // This is a meta-check: if description mentions "候选人" but NOT "synthetic/mock/合成/匿名"
+    // LYN-1180: 如果文本以"禁止使用真实候选人"等否定形式出现，额外考虑是否为 guardrail 声明
     checkFn: (text) => {
-      const hasCandidateRef = /候选人|candidate/i.test(text);
+      const hasCandidateRef = CANDIDATE_REF_PATTERN.test(text);
       const hasSafeLabel = /synthetic|mock|合成|匿名|no_real_pii|虚拟|模拟|模拟数据/i.test(text);
-      return hasCandidateRef && !hasSafeLabel;
+      if (!hasCandidateRef) return false;
+      if (hasSafeLabel) return false;
+      // 如果文本中有明确禁止声明（同时有"候选人"和"禁止/不得/不可"），标记为 guardrail，但仍发出 WARN
+      // （由调用方通过 classifySignal 进一步判断；这里只决定是否发出信号）
+      return true;
     },
-    severity: 'MEDIUM',
+    severity: 'HIGH',
     note: '包含"候选人"但未标注 synthetic/mock；需确认是否为真实数据',
   },
   {
     id: 'cand_pii_marker',
-    name: '真实 PII 标记',
+    name: '真实 PII 标记（含"真实候选人"等字样）',
+    // LYN-1180: "真实候选人" 出现在否定语境（"禁止使用真实候选人"）时为 guardrail-mention
     pattern: /(?:真实姓名|real.*name|actual.*candidate|真实候选人|非合成)/gi,
     severity: 'HIGH',
   },
 ];
 
 // ─── Check runner ─────────────────────────────────────────────────────────────
+
+/**
+ * 将 classification 映射到人工复核建议（LYN-1180）
+ */
+function reviewAdvice(classification, category) {
+  if (classification === 'guardrail-mention') {
+    return 'ℹ️ 该信号处于否定/边界语境，判断为 guardrail-mention（常见误报）。人工复核请确认：这是对该行为的禁止描述，还是确实正在发生该动作？';
+  }
+  if (category === 'external_action') {
+    return '⚠️ 外部触达工具行为信号，必须确认是否为 dry-run / disabled 标注或加了 human_confirm 门控。';
+  }
+  if (category === 'pii') {
+    return '⚠️ 实际 PII 信号，必须移除或替换为 synthetic/mock 数据。';
+  }
+  if (category === 'real_candidate') {
+    return '⚠️ 真实候选人数据红线信号，必须确认来源并替换为 synthetic/mock/no_real_pii 样例后才能继续。';
+  }
+  return '需人工确认该信号是否为实际风险。';
+}
+
 function scanText(text, issueRef) {
   const findings = [];
 
@@ -129,42 +238,65 @@ function scanText(text, issueRef) {
   for (const rule of PII_PATTERNS) {
     if (rule.checkFn) {
       if (rule.checkFn(text)) {
+        // checkFn-based rules: use first occurrence of '候选人' as representative
+        const candidateMatch = text.match(/候选人|candidate/i);
+        const idx = candidateMatch ? text.indexOf(candidateMatch[0]) : 0;
+        const classification = classifySignal(text, idx, candidateMatch ? candidateMatch[0] : '');
         findings.push({
           check_id: rule.id,
           check_name: rule.name,
           category: 'pii',
-          status: rule.severity === 'HIGH' ? 'FAIL' : 'WARN',
+          classification,
+          status: classification === 'guardrail-mention' ? 'WARN' : (rule.severity === 'HIGH' ? 'FAIL' : 'WARN'),
           description: rule.name,
+          judgment_reason: classification === 'guardrail-mention'
+            ? '文本包含否定/边界前缀，判断为 guardrail-mention。'
+            : '未检测到否定前缀，判断为 actual-risk。',
+          human_review: reviewAdvice(classification, 'pii'),
           source_ref: [{ ...issueRef, matched_pattern: rule.id }],
-          remediation: '移除或替换为合成数据',
+          remediation: classification === 'guardrail-mention' ? '否定上下文，建议人工确认' : '移除或替换为合成数据',
         });
       }
     } else if (rule.pattern) {
       rule.pattern.lastIndex = 0;
-      const matches = [];
+      const matchItems = [];
       let m;
       while ((m = rule.pattern.exec(text)) !== null) {
         const match = m[0];
         if (!rule.filter || rule.filter(match)) {
-          matches.push(match);
+          matchItems.push({ match, index: m.index });
         }
-        if (matches.length >= 3) break;
+        if (matchItems.length >= 3) break;
       }
-      if (matches.length > 0) {
+      if (matchItems.length > 0) {
+        const firstMatch = matchItems[0];
+        // noNegationCheck: true = 忽略否定分类（如真实手机号）
+        const classification = rule.noNegationCheck ? 'actual-risk' : classifySignal(text, firstMatch.index, firstMatch.match);
+        const excerpts = matchItems.slice(0, 2).map((mi) =>
+          extractExcerpt(text, mi.index, mi.match, 30, 40).slice(0, 120)
+        );
         findings.push({
           check_id: rule.id,
           check_name: rule.name,
           category: 'pii',
-          status: rule.severity === 'HIGH' ? 'FAIL' : 'WARN',
-          description: `${rule.name}，检测到 ${matches.length} 处匹配`,
+          classification,
+          raw_signals: matchItems.slice(0, 2).map((mi) => mi.match),
+          status: classification === 'guardrail-mention' ? 'WARN' : (rule.severity === 'HIGH' ? 'FAIL' : 'WARN'),
+          description: `${rule.name}，检测到 ${matchItems.length} 处匹配`,
+          judgment_reason: classification === 'guardrail-mention'
+            ? '匹配到否定/边界前缀，判断为 guardrail-mention（false-positive 来源）。'
+            : '未检测到否定前缀，判断为 actual-risk。',
+          human_review: reviewAdvice(classification, 'pii'),
           source_ref: [
             {
               ...issueRef,
               matched_pattern: rule.id,
-              excerpt: matches.slice(0, 2).join(', ').slice(0, 100),
+              excerpt: excerpts.join(' | ').slice(0, 200),
             },
           ],
-          remediation: '移除或替换为合成数据；如为示例/测试数据，添加 mock/synthetic 标注',
+          remediation: classification === 'guardrail-mention'
+            ? '否定上下文，建议人工确认是否为真实 PII'
+            : '移除或替换为合成数据；如为示例/测试数据，添加 mock/synthetic 标注',
         });
       }
     }
@@ -173,27 +305,40 @@ function scanText(text, issueRef) {
   // External action patterns
   for (const rule of EXTERNAL_ACTION_PATTERNS) {
     rule.pattern.lastIndex = 0;
-    const matches = [];
+    const matchItems = [];
     let m;
     while ((m = rule.pattern.exec(text)) !== null) {
-      matches.push(m[0]);
-      if (matches.length >= 3) break;
+      matchItems.push({ match: m[0], index: m.index });
+      if (matchItems.length >= 3) break;
     }
-    if (matches.length > 0) {
+    if (matchItems.length > 0) {
+      const firstMatch = matchItems[0];
+      const classification = classifySignal(text, firstMatch.index, firstMatch.match);
+      const excerpts = matchItems.slice(0, 2).map((mi) =>
+        extractExcerpt(text, mi.index, mi.match, 30, 50).slice(0, 120)
+      );
       findings.push({
         check_id: rule.id,
         check_name: rule.name,
         category: 'external_action',
-        status: 'FAIL',
-        description: `${rule.name}，检测到 ${matches.length} 处匹配`,
+        classification,
+        raw_signals: matchItems.slice(0, 2).map((mi) => mi.match),
+        status: classification === 'guardrail-mention' ? 'WARN' : 'FAIL',
+        description: `${rule.name}，检测到 ${matchItems.length} 处匹配`,
+        judgment_reason: classification === 'guardrail-mention'
+          ? '匹配内容处于否定语境，判断为 guardrail-mention。'
+          : '未检测到否定前缀，判断为 actual-risk（可能实际在执行该动作）。',
+        human_review: reviewAdvice(classification, 'external_action'),
         source_ref: [
           {
             ...issueRef,
             matched_pattern: rule.id,
-            excerpt: matches.slice(0, 2).join(', ').slice(0, 100),
+            excerpt: excerpts.join(' | ').slice(0, 200),
           },
         ],
-        remediation: rule.note || '外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控',
+        remediation: classification === 'guardrail-mention'
+          ? '否定上下文，建议人工确认是否发生了实际外部触达'
+          : (rule.note || '外部触达动作必须在 dry-run 中标注为 disabled/blocked，或加 human_confirm 门控'),
       });
     }
   }
@@ -202,30 +347,65 @@ function scanText(text, issueRef) {
   for (const rule of REAL_CANDIDATE_PATTERNS) {
     if (rule.checkFn) {
       if (rule.checkFn(text)) {
+        const candidateMatch = text.match(CANDIDATE_REF_PATTERN);
+        const candidateIndex = candidateMatch ? text.indexOf(candidateMatch[0]) : 0;
+        const rawSignal = candidateMatch ? candidateMatch[0] : '候选人';
+        const classification = classifySignal(text, candidateIndex, rawSignal);
+        const excerpt = extractExcerpt(text, candidateIndex, rawSignal, 35, 80).slice(0, 200);
         findings.push({
           check_id: rule.id,
           check_name: rule.name,
           category: 'real_candidate',
-          status: rule.severity === 'HIGH' ? 'FAIL' : 'WARN',
+          classification,
+          raw_signals: [rawSignal],
+          status: classification === 'guardrail-mention' ? 'WARN' : (rule.severity === 'HIGH' ? 'FAIL' : 'WARN'),
           description: rule.note || rule.name,
-          source_ref: [{ ...issueRef, matched_pattern: rule.id }],
-          remediation: '确认数据为 synthetic/mock；添加 no_real_pii 标注',
+          judgment_reason: classification === 'guardrail-mention'
+            ? '文本包含"候选人"但处于否定语境，判断为 guardrail-mention。'
+            : '未检测到否定前缀和 synthetic/mock 标注，判断为 actual-risk。',
+          human_review: reviewAdvice(classification, 'real_candidate'),
+          source_ref: [{ ...issueRef, matched_pattern: rule.id, excerpt }],
+          remediation: classification === 'guardrail-mention'
+            ? '否定上下文，建议人工确认是否为真实候选人数据'
+            : '阻断并替换为 synthetic/mock；添加 no_real_pii 标注',
         });
       }
     } else if (rule.pattern) {
       rule.pattern.lastIndex = 0;
-      const m = rule.pattern.exec(text);
-      if (m) {
+      const matchItems = [];
+      let m;
+      while ((m = rule.pattern.exec(text)) !== null) {
+        matchItems.push({ match: m[0], index: m.index });
+        if (matchItems.length >= 3) break;
+      }
+      if (matchItems.length > 0) {
+        const firstMatch = matchItems[0];
+        const classification = classifySignal(text, firstMatch.index, firstMatch.match);
+        const excerpts = matchItems.slice(0, 2).map((mi) =>
+          extractExcerpt(text, mi.index, mi.match, 30, 50).slice(0, 120)
+        );
         findings.push({
           check_id: rule.id,
           check_name: rule.name,
           category: 'real_candidate',
-          status: 'FAIL',
+          classification,
+          raw_signals: matchItems.slice(0, 2).map((mi) => mi.match),
+          status: classification === 'guardrail-mention' ? 'WARN' : 'FAIL',
           description: rule.name,
+          judgment_reason: classification === 'guardrail-mention'
+            ? '匹配内容处于否定语境，判断为 guardrail-mention。'
+            : '未检测到否定前缀，判断为 actual-risk。',
+          human_review: reviewAdvice(classification, 'real_candidate'),
           source_ref: [
-            { ...issueRef, matched_pattern: rule.id, excerpt: m[0].slice(0, 100) },
+            {
+              ...issueRef,
+              matched_pattern: rule.id,
+              excerpt: excerpts.join(' | ').slice(0, 200),
+            },
           ],
-          remediation: '替换为 synthetic 数据',
+          remediation: classification === 'guardrail-mention'
+            ? '否定上下文，建议人工确认是否为真实候选人标记'
+            : '替换为 synthetic 数据',
         });
       }
     }
@@ -272,13 +452,19 @@ function runChecks(data) {
     }
   }
 
-  // Calculate risk level
-  const hasFail = allFindings.some((f) => f.status === 'FAIL');
-  const hasWarn = allFindings.some((f) => f.status === 'WARN');
-  const failCount = allFindings.filter((f) => f.status === 'FAIL').length;
+  // Calculate risk level (LYN-1180: 分离 actual-risk 与 guardrail-mention)
+  // actual-risk FAIL = 真实违规信号（需要立即处理）
+  // guardrail-mention FAIL (降级为 WARN) = 否定/边界描述（常见 false-positive）
+  const actualRiskFindings = allFindings.filter((f) => f.classification === 'actual-risk');
+  const guardrailFindings = allFindings.filter((f) => f.classification === 'guardrail-mention');
+
+  const hasFail = actualRiskFindings.some((f) => f.status === 'FAIL');
+  const hasWarn = allFindings.some((f) => f.status === 'WARN') || guardrailFindings.length > 0;
+  const failCount = actualRiskFindings.filter((f) => f.status === 'FAIL').length;
   const highRiskCategories = new Set(
-    allFindings.filter((f) => f.status === 'FAIL').map((f) => f.category)
+    actualRiskFindings.filter((f) => f.status === 'FAIL').map((f) => f.category)
   );
+  const guardrailMentionCount = guardrailFindings.length;
 
   let riskLevel;
   let recommendation;
@@ -287,13 +473,18 @@ function runChecks(data) {
     riskLevel = 'CLEAR';
     recommendation = 'continue';
   } else if (failCount === 0 && hasWarn) {
-    riskLevel = 'LOW';
+    // 只有 guardrail-mention 或 WARN 级别信号
+    riskLevel = guardrailMentionCount > 0 ? 'LOW' : 'LOW';
     recommendation = 'review';
-  } else if (hasFail && highRiskCategories.has('external_action')) {
+  } else if (
+    hasFail &&
+    (
+      highRiskCategories.has('external_action') ||
+      highRiskCategories.has('pii') ||
+      highRiskCategories.has('real_candidate')
+    )
+  ) {
     riskLevel = 'BLOCKED';
-    recommendation = 'block';
-  } else if (hasFail && (highRiskCategories.has('pii') || highRiskCategories.has('real_candidate'))) {
-    riskLevel = 'HIGH';
     recommendation = 'block';
   } else if (hasFail) {
     riskLevel = 'MEDIUM';
@@ -324,6 +515,9 @@ function runChecks(data) {
       pii_signals_count: dedupedFindings.filter((f) => f.category === 'pii').length,
       external_action_signals_count: dedupedFindings.filter((f) => f.category === 'external_action').length,
       real_candidate_signals_count: dedupedFindings.filter((f) => f.category === 'real_candidate').length,
+      // LYN-1180: 分类统计
+      actual_risk_count: dedupedFindings.filter((f) => f.classification === 'actual-risk' && f.status === 'FAIL').length,
+      guardrail_mention_count: dedupedFindings.filter((f) => f.classification === 'guardrail-mention').length,
     },
     checks: dedupedFindings,
   };
@@ -358,19 +552,47 @@ function toMarkdown(result) {
     `| ${statusIcon} **${summary.risk_level}** | ${recLabel} | ${summary.pii_signals_count} | ${summary.external_action_signals_count} | ${summary.real_candidate_signals_count} |`
   );
 
+  if (summary.guardrail_mention_count > 0) {
+    lines.push(`\n> 💡 **${summary.guardrail_mention_count} 条 guardrail-mention 信号**已识别为否定/边界声明（false-positive 候选），状态降级为 WARN。建议人工确认后继续。`);
+  }
+
   if (checks.length === 0) {
     lines.push(`\n✅ 未检测到已知隐私或外部触达风险。`);
   } else {
-    lines.push(`\n## 检测发现（${checks.length} 条）\n`);
-    lines.push(`| 检查项 | 来源 | 状态 | 分类 | 修复建议 |`);
-    lines.push(`|---|---|---|---|---|`);
-    for (const c of checks) {
-      const source = (c.source_ref || [])
-        .slice(0, 2)
-        .map((s) => [s.identifier, s.field].filter(Boolean).join('>'))
-        .join(', ');
-      const statusIcon2 = c.status === 'FAIL' ? '🔴 FAIL' : '🟡 WARN';
-      lines.push(`| ${c.check_name} | ${source} | ${statusIcon2} | ${c.category} | ${c.remediation || '—'} |`);
+    const actualRiskChecks = checks.filter((c) => c.classification === 'actual-risk');
+    const guardrailChecks = checks.filter((c) => c.classification === 'guardrail-mention');
+
+    if (actualRiskChecks.length > 0) {
+      lines.push(`\n## 🔴 actual-risk 信号（${actualRiskChecks.length} 条）\n`);
+      lines.push(`| 检查项 | 来源 | 状态 | 分类 | 判定理由 | 人工复核 | 修复建议 |`);
+      lines.push(`|---|---|---|---|---|---|---|`);
+      for (const c of actualRiskChecks) {
+        const source = (c.source_ref || [])
+          .slice(0, 2)
+          .map((s) => [s.identifier, s.field].filter(Boolean).join('>'))
+          .join(', ');
+        const excerpt = (c.source_ref || [])[0]?.excerpt || '—';
+        const statusIcon2 = c.status === 'FAIL' ? '🔴 FAIL' : '🟡 WARN';
+        lines.push(`| ${c.check_name} | ${source} | ${statusIcon2} | actual-risk | ${c.judgment_reason || '—'} | ${c.human_review || '—'} | ${c.remediation || '—'} |`);
+        if (excerpt && excerpt !== '—') lines.push(`> excerpt: \`${excerpt.slice(0, 80)}\``);
+      }
+    }
+
+    if (guardrailChecks.length > 0) {
+      lines.push(`\n## 💡 guardrail-mention 信号（${guardrailChecks.length} 条 — 常见 false-positive）\n`);
+      lines.push(`> 以下信号触发了规则，但处于否定/禁止语境，判断为边界描述而非实际违规。`);
+      lines.push(`> 人工复核只需确认：这些是规则描述/禁止条款，而非实际发生的行为。\n`);
+      lines.push(`| 检查项 | 来源 | 判定理由 | raw_signal | excerpt |`);
+      lines.push(`|---|---|---|---|---|`);
+      for (const c of guardrailChecks) {
+        const source = (c.source_ref || [])
+          .slice(0, 2)
+          .map((s) => [s.identifier, s.field].filter(Boolean).join('>'))
+          .join(', ');
+        const rawSig = (c.raw_signals || []).join(', ') || c.check_id;
+        const excerpt = ((c.source_ref || [])[0]?.excerpt || '—').slice(0, 60);
+        lines.push(`| ${c.check_name} | ${source} | ${c.judgment_reason || '—'} | \`${rawSig}\` | \`${excerpt}\` |`);
+      }
     }
   }
 
@@ -404,7 +626,7 @@ async function main() {
 
   if (args.help) {
     console.log(`
-harness-privacy-check.js — LYN-1150 dry-run CLI
+harness-privacy-check.js — LYN-1150/LYN-1180 dry-run CLI
 
 Options:
   --input <path>      读取 issue JSON 文件
@@ -413,7 +635,20 @@ Options:
   --help              显示帮助
 
 风险等级：CLEAR < LOW < MEDIUM < HIGH < BLOCKED
-BLOCKED = 有明确 PII 或外部触达，必须人工处理后才能继续
+  CLEAR   = 无任何信号
+  LOW     = 仅有 WARN 或 guardrail-mention（否定/边界描述）信号
+  MEDIUM  = 有 actual-risk FAIL 但非高优先级分类
+  HIGH    = 保留给高风险但未达到阻断条件的扩展规则
+  BLOCKED = 有 actual-risk PII、真实候选人数据、外部触达或真实系统写入 FAIL 信号
+
+信号分类（LYN-1180）：
+  actual-risk       = 实际 PII/外部触达，需立即处理
+  guardrail-mention = 否定/禁止/边界描述，常见 false-positive 来源
+                      例："禁止使用真实候选人" → guardrail-mention
+                          实际出现真实手机号  → actual-risk
+
+注意：BLOCKED 不一定是实际违规，可能是 guardrail-mention 触发。
+      查看 checks[].classification 字段判断是否需要立即处理。
 `);
     process.exit(0);
   }
