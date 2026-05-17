@@ -1,0 +1,419 @@
+{
+  "meta": {
+    "generated_at": "2026-05-17T20:15:19.686Z",
+    "dry_run": true,
+    "source": "multica-api",
+    "status": "complete",
+    "external_writes": "none",
+    "note": "synthetic/no_real_pii 受控样例运行；未产生外部写操作"
+  },
+  "summary": {
+    "total_candidates": 7,
+    "issues_scanned": 6,
+    "comments_scanned": 677,
+    "by_tier": {
+      "immediate_script": {
+        "count": 1,
+        "ids": [
+          "tc_progress_update"
+        ]
+      },
+      "needs_design": {
+        "count": 5,
+        "ids": [
+          "tc_duplicate_trigger_detect",
+          "tc_issue_create_batch",
+          "tc_rework_pattern_log",
+          "tc_privacy_check_gate",
+          "tc_issue_status_flip"
+        ]
+      },
+      "defer_high_risk": {
+        "count": 1,
+        "ids": [
+          "tc_feishu_notify"
+        ]
+      }
+    }
+  },
+  "tool_candidates": [
+    {
+      "tool_candidate_id": "tc_progress_update",
+      "name": "进展中枢状态更新",
+      "kind": "script",
+      "tier": "immediate_script",
+      "scoring": {
+        "frequency_score": 60,
+        "rework_score": 30,
+        "risk_penalty": 10,
+        "total_score": 80,
+        "confidence": "HIGH",
+        "trigger_count": 386,
+        "rework_count": 5,
+        "run_failure_count": 1,
+        "issue_sources": [
+          "LYN-36",
+          "LYN-76",
+          "LYN-1142"
+        ]
+      },
+      "proposed_tool": {
+        "name": "progress_update",
+        "kind": "script",
+        "description": "周期性（约每 20 分钟）从 issue tree 聚合进展数据并更新 LYN-76",
+        "scriptability": "HIGH",
+        "human_confirm_required": false,
+        "expected_benefit": "progress-manifest 脚本已有基础（harness-progress-manifest.js），工具化后可消除手动运行成本",
+        "risk_boundary": "current_stage/next_20min 字段仍需人工覆盖；不自动推断意图"
+      },
+      "trigger": {
+        "type": "repeated_action+reviewer_return",
+        "evidence": [
+          {
+            "source": "LYN-36#fa48229e",
+            "type": "comment",
+            "excerpt": "已确认并接通。 我已把飞书通知收件人固定为 `Lynn 宁辽原`，open_id：`ou_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`。刚刚已经发送了一条测试通知，发送成功，message_id：`om_x100b6f35b67b98b8b2f564b7817c2d7`。 我也把这个收件人和通知规则写进了[LYN-76 进展中枢](mention://issue/913769"
+          },
+          {
+            "source": "LYN-36#24e47645",
+            "type": "comment",
+            "excerpt": "你说得对，之前是不够的。 我核查后确认：两个 autopilot 之前确实都只运行了 1 次，来源都是 `manual`，并没有形成每 20 分钟自动触发。原因是当前 `multica autopilot create/update` CLI 没有暴露原生 `cron` / `interval` 参数，我之前只是把“20 分钟”写进描述并手动触发了一次，这不等于真正调度。 我已经补修：在本机安装了"
+          },
+          {
+            "source": "LYN-36#cd2f55b3",
+            "type": "comment",
+            "excerpt": "对，需要从“定时触发”升级成“连续执行机制”。我已经补了。 现在是三层机制： 1. 20 分钟调度器：`com.multica.lyn36.autopilot20min`，每 1200 秒触发 Mia 推进 + Vega 审计。 2. 5 分钟 watchdog：`com.multica.lyn36.autopilot-watchdog`，每 300 秒检查调度器是否存在、最近一次成功运行是否过期"
+          }
+        ]
+      },
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "status": "draft",
+      "note": "触发次数 386，返工 5，风险标志 1"
+    },
+    {
+      "tool_candidate_id": "tc_duplicate_trigger_detect",
+      "name": "重复触发检测",
+      "kind": "script",
+      "tier": "needs_design",
+      "scoring": {
+        "frequency_score": 60,
+        "rework_score": 30,
+        "risk_penalty": 0,
+        "total_score": 90,
+        "confidence": "HIGH",
+        "trigger_count": 27,
+        "rework_count": 6,
+        "run_failure_count": 1,
+        "issue_sources": [
+          "LYN-36",
+          "LYN-76",
+          "LYN-1146"
+        ]
+      },
+      "proposed_tool": {
+        "name": "duplicate_trigger_detect",
+        "kind": "script",
+        "description": "调度器/LaunchAgent 多次触发同一 autopilot run，产生重复 issue，需要人工识别和清理",
+        "scriptability": "MEDIUM",
+        "human_confirm_required": true,
+        "expected_benefit": "脚本化 idempotency check：检查同一时间窗口内是否已有相同 title 的 issue，若有则跳过创建；预防重复触发",
+        "risk_boundary": "判断\"重复\"的规则需人工设计；自动删除/cancel 动作禁止；仅输出告警"
+      },
+      "trigger": {
+        "type": "repeated_action+reviewer_return",
+        "evidence": [
+          {
+            "source": "LYN-36#34649cdd",
+            "type": "comment",
+            "excerpt": "结论：这个思路是对的，而且它比“给猎头流程每个环节配一个 Agent”更高一层。真正要搭的是一个 **Agent Native 的组织操作系统**：总负责 Agent 负责接需求和调度，HR Agent 负责建队和调优，专项 Agent 负责做事，Reviewer/Auditor 负责验收和复盘，Tool/Software Builder 负责把重复任务产品化。系统的增长不是靠人手动规划，而是靠每"
+          },
+          {
+            "source": "LYN-76#f5ccc4be",
+            "type": "comment",
+            "excerpt": "本轮已更新中枢：20 分钟平台 schedule trigger 已存在，但 14:40 UTC 推进脉冲出现重复 scheduled issue，已把 [LYN-86](mention://issue/49829195-af9c-45bd-aa0d-b9fa8345ff17) 退回继续排查重复触发源。 业务推进上已创建 [LYN-90](mention://issue/049124f5-269f"
+          },
+          {
+            "source": "LYN-76#8a994868",
+            "type": "comment",
+            "excerpt": "15:00 UTC 观察补充：重复触发风险已被证实，不只是猜测。 - 14:56:23 UTC：本机 LaunchAgent 额外创建推进 manual run，issue `d641f900-f8fb-4a2d-bb27-3172d113e370`。 - 14:56:34 UTC：本机 LaunchAgent 额外创建审计 manual run，issue `f064ab8f-e659-4e70"
+          }
+        ]
+      },
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "status": "draft",
+      "note": "触发次数 27，返工 6，风险标志 0"
+    },
+    {
+      "tool_candidate_id": "tc_issue_create_batch",
+      "name": "批量 Issue 创建",
+      "kind": "cli",
+      "tier": "needs_design",
+      "scoring": {
+        "frequency_score": 58,
+        "rework_score": 30,
+        "risk_penalty": 0,
+        "total_score": 88,
+        "confidence": "HIGH",
+        "trigger_count": 23,
+        "rework_count": 4,
+        "run_failure_count": 1,
+        "issue_sources": [
+          "LYN-36",
+          "LYN-76",
+          "LYN-1142"
+        ]
+      },
+      "proposed_tool": {
+        "name": "issue_create_batch",
+        "kind": "cli",
+        "description": "每轮推进脉冲创建多个子任务 issue，格式固定但每次手动执行",
+        "scriptability": "HIGH",
+        "human_confirm_required": true,
+        "expected_benefit": "封装 issue-batch-create 脚本：从模板 JSON 批量创建带统一 label/assignee/parent 的 issue；减少逐条创建成本",
+        "risk_boundary": "创建前需人工确认 issue 列表；不自动创建 Agent 类 issue；不修改已有 issue"
+      },
+      "trigger": {
+        "type": "repeated_action+reviewer_return",
+        "evidence": [
+          {
+            "source": "LYN-36#bde407d3",
+            "type": "comment",
+            "excerpt": "收到，样本方向我会改成“中国 AI 公司 + 中国猎头业务”。之前提到的海外公司只作为对照，不作为主样本。候选人数据建议只做“合成/匿名化画像”，用公开岗位、公司产品线、技术栈和行业信号来生成，不直接采集真实个人隐私。 起步样本池我建议先用这些公开来源做 mock 客户需求和岗位结构：MiniMax 官方招聘页 https://www.minimax.io/careers ，百度人才招聘里的 AI"
+          },
+          {
+            "source": "LYN-36#029a259c",
+            "type": "comment",
+            "excerpt": "可以。我建议做成“两层可见进展”：Multica 作为完整进展中枢，飞书只推关键摘要，避免每 20 分钟刷屏。 我已经创建了一个固定查看入口：[LYN-76](mention://issue/9137698c-659b-4832-9d74-9bb3bb6341e4)。它会作为 [LYN-36](mention://issue/22cd2a15-9893-4a4f-9177-3ac65dd3abf0"
+          },
+          {
+            "source": "LYN-36#ecdf223d",
+            "type": "comment",
+            "excerpt": "结论：你判断得对，之前两个 autopilot 没有按每 20 分钟自动跑起来。 我刚核查了运行记录：推进脉冲和初心审计都是 active，但 `runs` 里只有 manual run。第一次是 2026-05-10 05:47 UTC，第二次是 2026-05-10 14:36 UTC，中间没有自动 20 分钟触发。CLI 侧 `autopilot create/update` 目前也没有 s"
+          }
+        ]
+      },
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "status": "draft",
+      "note": "触发次数 23，返工 4，风险标志 0"
+    },
+    {
+      "tool_candidate_id": "tc_rework_pattern_log",
+      "name": "返工/退回模式记录",
+      "kind": "script",
+      "tier": "needs_design",
+      "scoring": {
+        "frequency_score": 25,
+        "rework_score": 30,
+        "risk_penalty": 0,
+        "total_score": 55,
+        "confidence": "HIGH",
+        "trigger_count": 10,
+        "rework_count": 10,
+        "run_failure_count": 2,
+        "issue_sources": [
+          "LYN-36",
+          "LYN-76",
+          "LYN-1142",
+          "LYN-1146"
+        ]
+      },
+      "proposed_tool": {
+        "name": "rework_pattern_log",
+        "kind": "script",
+        "description": "Reviewer 多次退回同一类型输出（进展数据格式不符、状态误判）；目前无自动记录",
+        "scriptability": "MEDIUM",
+        "human_confirm_required": true,
+        "expected_benefit": "脚本化 rework-log：从评论中提取退回事件，统计各类输出的退回率，为 tool-candidate 触发提供准确信号",
+        "risk_boundary": "返工判断依赖评论文本，有误判风险；结果为建议，不自动修改任何输出"
+      },
+      "trigger": {
+        "type": "repeated_action+reviewer_return",
+        "evidence": [
+          {
+            "source": "LYN-36#34649cdd",
+            "type": "comment",
+            "excerpt": "结论：这个思路是对的，而且它比“给猎头流程每个环节配一个 Agent”更高一层。真正要搭的是一个 **Agent Native 的组织操作系统**：总负责 Agent 负责接需求和调度，HR Agent 负责建队和调优，专项 Agent 负责做事，Reviewer/Auditor 负责验收和复盘，Tool/Software Builder 负责把重复任务产品化。系统的增长不是靠人手动规划，而是靠每"
+          },
+          {
+            "source": "LYN-76#f5ccc4be",
+            "type": "comment",
+            "excerpt": "本轮已更新中枢：20 分钟平台 schedule trigger 已存在，但 14:40 UTC 推进脉冲出现重复 scheduled issue，已把 [LYN-86](mention://issue/49829195-af9c-45bd-aa0d-b9fa8345ff17) 退回继续排查重复触发源。 业务推进上已创建 [LYN-90](mention://issue/049124f5-269f"
+          },
+          {
+            "source": "LYN-76#8a994868",
+            "type": "comment",
+            "excerpt": "15:00 UTC 观察补充：重复触发风险已被证实，不只是猜测。 - 14:56:23 UTC：本机 LaunchAgent 额外创建推进 manual run，issue `d641f900-f8fb-4a2d-bb27-3172d113e370`。 - 14:56:34 UTC：本机 LaunchAgent 额外创建审计 manual run，issue `f064ab8f-e659-4e70"
+          }
+        ]
+      },
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "status": "draft",
+      "note": "触发次数 10，返工 10，风险标志 0"
+    },
+    {
+      "tool_candidate_id": "tc_privacy_check_gate",
+      "name": "Privacy Check 准入门控",
+      "kind": "module",
+      "tier": "needs_design",
+      "scoring": {
+        "frequency_score": 13,
+        "rework_score": 16,
+        "risk_penalty": 0,
+        "total_score": 29,
+        "confidence": "MEDIUM",
+        "trigger_count": 5,
+        "rework_count": 2,
+        "run_failure_count": 2,
+        "issue_sources": [
+          "LYN-76",
+          "LYN-1142",
+          "LYN-1146",
+          "LYN-1150"
+        ]
+      },
+      "proposed_tool": {
+        "name": "privacy_check_gate",
+        "kind": "module",
+        "description": "任何真实 harness run 前必须运行 privacy-check；目前是手动步骤，偶尔被跳过",
+        "scriptability": "HIGH",
+        "human_confirm_required": false,
+        "expected_benefit": "harness-privacy-check.js 已实现；可集成为 pre-run hook：run 前自动调用，BLOCKED 时阻止执行",
+        "risk_boundary": "仅作为 gate check；不自动修改或过滤输入数据；BLOCKED 结果必须由人工处理"
+      },
+      "trigger": {
+        "type": "repeated_action+reviewer_return",
+        "evidence": [
+          {
+            "source": "LYN-76#46becf2e",
+            "type": "comment",
+            "excerpt": "10:35 CST guardrail 审计已完成：主线未偏航，不发飞书。 复核结果：项目仍为 42 个 issue，状态分布为 34 done、5 cancelled、2 in_progress（[LYN-30](mention://issue/e178c0fc-b45d-40b3-b493-fb1a960e525a)、[LYN-76](mention://issue/9137698c-659b"
+          },
+          {
+            "source": "LYN-76#ad3c9b0b",
+            "type": "comment",
+            "excerpt": "10:54 CST guardrail 审计已完成：主线未偏航，不发飞书。 复核结果：项目仍为 42 个 issue，剩余活跃项延续为 [LYN-30](mention://issue/e178c0fc-b45d-40b3-b493-fb1a960e525a)、[LYN-76](mention://issue/9137698c-659b-4832-9d74-9bb3bb6341e4) in_pro"
+          },
+          {
+            "source": "LYN-1142#9a5d8886",
+            "type": "comment",
+            "excerpt": "结论：第一版 Agent Team Harness 不需要先新建一套平台能力，可以直接把 Multica 当成“业务操作系统”：issue tree 承载 case 和阶段任务，comment 承载事件日志/交付物/复盘，label 承载状态与风险，assignee 承载责任人，agent run/run-messages 承载执行轨迹，autopilot 承载推进脉冲/初心审计/工具候选挖掘，r"
+          }
+        ]
+      },
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "status": "draft",
+      "note": "触发次数 5，返工 2，风险标志 0"
+    },
+    {
+      "tool_candidate_id": "tc_issue_status_flip",
+      "name": "Issue 状态批量更新",
+      "kind": "cli",
+      "tier": "needs_design",
+      "scoring": {
+        "frequency_score": 18,
+        "rework_score": 8,
+        "risk_penalty": 0,
+        "total_score": 26,
+        "confidence": "MEDIUM",
+        "trigger_count": 7,
+        "rework_count": 1,
+        "run_failure_count": 0,
+        "issue_sources": [
+          "LYN-36",
+          "LYN-76"
+        ]
+      },
+      "proposed_tool": {
+        "name": "issue_status_flip",
+        "kind": "cli",
+        "description": "多个 issue 被手动从 in_progress → in_review / done / blocked；每次需要逐个操作",
+        "scriptability": "HIGH",
+        "human_confirm_required": true,
+        "expected_benefit": "multica CLI 已有 issue status 子命令；可以封装 batch-status 脚本，减少多次手动触发",
+        "risk_boundary": "批量状态变更需人工确认目标 issue 列表；不应自动推断哪些 issue 需要变更"
+      },
+      "trigger": {
+        "type": "repeated_action+reviewer_return",
+        "evidence": [
+          {
+            "source": "LYN-36#b1ddbe35",
+            "type": "comment",
+            "excerpt": "已完成整体 review，并按当前总目标做了推进。 我的判断：当前不应该继续平均铺开所有早期任务，而要围绕“中国 AI 猎头模拟系统”收敛。已交付的素材任务可以收口，下一阶段重点是 [LYN-37](mention://issue/e0e20cd3-c0ef-46e3-a071-bebfaf9da632) 业务关键流程二次收敛，以及 GUI v0.1 继续增强可视化。 已收口为 done： - ["
+          },
+          {
+            "source": "LYN-76#2ad4e2cd",
+            "type": "comment",
+            "excerpt": "整体任务 review 已完成，本轮已做状态收口和继续推进。 已收口为 done：[LYN-31](mention://issue/2cf31f1b-8a18-4b94-9a63-c712bf22e497)/32/33/34、[LYN-68](mention://issue/3899c6be-a2dc-4a73-a1ec-166c9fe19cf1)/69/70/72/86/90。 继续推进： - "
+          },
+          {
+            "source": "LYN-76#22a2d4f7",
+            "type": "comment",
+            "excerpt": "审计更新：已将 [LYN-101](mention://issue/cac7687c-0256-4c80-8961-5912d785fb91) 对齐为 in_review；[LYN-86](mention://issue/49829195-af9c-45bd-aa0d-b9fa8345ff17) 因等待 Lynn 确认本机调度去重方案，已标为 blocked。 本轮属于“需要 Lynn 决策”，已"
+          }
+        ]
+      },
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "status": "draft",
+      "note": "触发次数 7，返工 1，风险标志 0"
+    },
+    {
+      "tool_candidate_id": "tc_feishu_notify",
+      "name": "飞书通知发送",
+      "kind": "script",
+      "tier": "defer_high_risk",
+      "scoring": {
+        "frequency_score": 28,
+        "rework_score": 8,
+        "risk_penalty": 20,
+        "total_score": 16,
+        "confidence": "MEDIUM",
+        "trigger_count": 11,
+        "rework_count": 1,
+        "run_failure_count": 0,
+        "issue_sources": [
+          "LYN-36",
+          "LYN-76"
+        ]
+      },
+      "proposed_tool": {
+        "name": "feishu_notify",
+        "kind": "script",
+        "description": "定期或事件触发的飞书消息推送；规则固定（里程碑/阻塞/偏航/决策），但每次手动触发",
+        "scriptability": "HIGH",
+        "human_confirm_required": false,
+        "expected_benefit": "消除每次手动触发；可脚本化为 rule-based trigger（阻塞/里程碑条件满足后自动发送）",
+        "risk_boundary": "需要确认 feishu open_id 和 chat_id 为 synthetic；真实收件人需人工确认"
+      },
+      "trigger": {
+        "type": "repeated_action+reviewer_return",
+        "evidence": [
+          {
+            "source": "LYN-36#029a259c",
+            "type": "comment",
+            "excerpt": "可以。我建议做成“两层可见进展”：Multica 作为完整进展中枢，飞书只推关键摘要，避免每 20 分钟刷屏。 我已经创建了一个固定查看入口：[LYN-76](mention://issue/9137698c-659b-4832-9d74-9bb3bb6341e4)。它会作为 [LYN-36](mention://issue/22cd2a15-9893-4a4f-9177-3ac65dd3abf0"
+          },
+          {
+            "source": "LYN-36#fa48229e",
+            "type": "comment",
+            "excerpt": "已确认并接通。 我已把飞书通知收件人固定为 `Lynn 宁辽原`，open_id：`ou_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`。刚刚已经发送了一条测试通知，发送成功，message_id：`om_x100b6f35b67b98b8b2f564b7817c2d7`。 我也把这个收件人和通知规则写进了[LYN-76 进展中枢](mention://issue/913769"
+          },
+          {
+            "source": "LYN-76",
+            "type": "issue",
+            "excerpt": "LYN-36 进展中枢：Agent Native 猎头平台 用途：作为 [LYN-36](mention://issue/22cd2a15-9893-4a4f-9177-3ac65dd3abf0) 的固定进展查看入口，避免关键信息散落在多个评论、autopilot 运行和子任务里。 更新时间：2026-05-18 00:05 CST / 2026-05-17 16:05 UTC ## 当前北极星 "
+          }
+        ]
+      },
+      "manual_override": true,
+      "auto_infer_forbidden": true,
+      "status": "draft",
+      "note": "触发次数 11，返工 1，风险标志 2"
+    }
+  ]
+}

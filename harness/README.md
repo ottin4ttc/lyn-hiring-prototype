@@ -10,7 +10,7 @@
 |---|---|---|
 | `progress-manifest` | ✅ 首选 | LYN-437 已沉淀完整验收口径（5 列格式、9 个字段）；是 v0.3 进展数据自动化的前置；风险最低 |
 | `privacy-check` | ✅ 首选 | 任何真实 harness 运行的准入门槛；不通过不应进入外部触达；可在 dry-run 阶段单独运行 |
-| `tool-candidate` | 次优 | 依赖 run-messages 聚合，目前 issue 体量不足触发；可作为后续扩展 |
+| `tool-candidate` | ✅ 已实现 | LYN-1190 完整化：从 issue/comment 聚合 8 类信号，评分分层输出 3 类候选（immediate_script / needs_design / defer_high_risk）|
 | `run-digest` | 次优 | 需要 run-messages API；当前 harness issue 运行记录不丰富，样例质量低 |
 | `retro-extract` | 次优 | 需要完整 case 闭环；当前没有真实 case done 状态 |
 
@@ -21,7 +21,7 @@ harness/
 ├── README.md                         # 本文件
 ├── harness-progress-manifest.js      # progress-manifest dry-run CLI（含在线模式）
 ├── harness-privacy-check.js          # privacy-check dry-run CLI
-├── harness-tool-candidate.js         # tool-candidate dry-run CLI（骨架）
+├── harness-tool-candidate.js         # tool-candidate dry-run CLI（完整版，LYN-1190）
 ├── schemas/
 │   ├── progress-manifest.schema.json # manifest 输出 schema
 │   └── privacy-check.schema.json     # privacy 报告 schema
@@ -31,7 +31,8 @@ harness/
     ├── progress-manifest-sample.md    # 离线 dry-run 样例 Markdown
     ├── online-manifest-sample.json    # 在线模式（LYN-36 parent）样例 JSON 输出
     ├── online-manifest-sample.md      # 在线模式（LYN-36 parent）样例 Markdown
-    └── privacy-check-sample.json      # 隐私检查样例
+    ├── privacy-check-sample.json      # 隐私检查样例
+    └── tool-candidate-sample.json     # tool-candidate 干跑输出样例（LYN-1190）
 ```
 
 ## 使用方法
@@ -84,6 +85,34 @@ node harness/harness-privacy-check.js \
 ```
 
 > ℹ️ `privacy-check` 当前支持离线模式（`--input` / `--input-stdin`）。在线 `--issues` 模式已在 `harness-progress-manifest.js` 实现（LYN-1179）；`harness-privacy-check.js` 尚未集成在线拉取，如需在线检查，可先用 `--issues` 生成 manifest JSON 后再进行检查。
+
+### tool-candidate（LYN-1190 完整版）
+
+```bash
+# 离线模式：从 JSON 文件读取
+ node harness/harness-tool-candidate.js \
+  --input harness/examples/issues-input.json
+
+# 过滤低分候选（只输出总分 ≥ 50 的）
+node harness/harness-tool-candidate.js \
+  --input harness/examples/issues-input.json \
+  --min-score 50
+
+# stdin 模式
+cat harness/examples/issues-input.json | \
+  node harness/harness-tool-candidate.js --input-stdin
+
+# 查看帮助（包含如何解读候选、不能自动执行的候选说明）
+node harness/harness-tool-candidate.js --help
+```
+
+> ✅ **`tool-candidate` 已完整实现（LYN-1190）。** 从 issue tree 和 comment 中聚合 8 类信号，按频率/返工率/风险三维度评分，输出 immediate_script / needs_design / defer_high_risk 三层候选清单。
+>
+> **安全边界：**
+> - dry-run only：不写任何外部系统
+> - 输出仅为候选建议；不自动创建工具、Agent 或修改任何 issue/系统
+> - 每个候选必须有来源证据（trigger.evidence）
+> - `manual_override: true` —— 所有候选均需人工确认后才能实施
 
 ## 输入格式
 
@@ -208,6 +237,7 @@ summary 现在包含：
 
 - `harness/examples/privacy-check-fp-examples.json`: 3 条 guardrail-mention + 2 条 actual-risk 合成样例
 - `harness/examples/privacy-check-improvement-comparison.md`: 改进前后对比说明
+- `harness/examples/tool-candidate-sample.json`: tool-candidate 评分和分层输出样例（LYN-1190）
 
 ## 安全边界
 
