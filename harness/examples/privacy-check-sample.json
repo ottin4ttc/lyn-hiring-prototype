@@ -1,13 +1,13 @@
 {
   "meta": {
-    "generated_at": "2026-05-17T16:12:38.590Z",
+    "generated_at": "2026-05-17T18:05:50.401Z",
     "dry_run": true,
     "issues_scanned": 6
   },
   "summary": {
     "risk_level": "BLOCKED",
     "recommendation": "block",
-    "pii_signals_count": 2,
+    "pii_signals_count": 1,
     "external_action_signals_count": 7,
     "real_candidate_signals_count": 12
   },
@@ -100,24 +100,6 @@
         }
       ],
       "remediation": "替换为 synthetic 数据"
-    },
-    {
-      "check_id": "pii_email",
-      "check_name": "邮箱地址",
-      "category": "pii",
-      "status": "WARN",
-      "description": "邮箱地址，检测到 1 处匹配",
-      "source_ref": [
-        {
-          "type": "comment",
-          "id": "029a259c-4de4-4d85-ae63-41be5e66985b",
-          "identifier": "LYN-36",
-          "field": "comment.content",
-          "matched_pattern": "pii_email",
-          "excerpt": "lynn.ning@ttcadvisory.com"
-        }
-      ],
-      "remediation": "移除或替换为合成数据；如为示例/测试数据，添加 mock/synthetic 标注"
     },
     {
       "check_id": "ext_real_write",

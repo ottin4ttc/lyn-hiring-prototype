@@ -73,9 +73,9 @@ node harness/harness-privacy-check.js \
 |---|---|---|---|
 | `--input` | path | ✅ 已实现 | 本地 JSON 文件（issue 数组，见 schema）|
 | `--input-stdin` | flag | ✅ 已实现 | 从 stdin 读取 JSON |
-| `--schema` | path | ✅ 已实现 | 覆盖默认 schema 路径 |
+| `--schema` | path | ⛔ 未实现 | 覆盖默认 schema 路径 — parser 中无此参数，当前不支持；schema 路径在脚本内硬编码 |
 | `--output` | enum | ✅ 已实现 | `json`（默认）\| `markdown` \| `table` |
-| `--dry-run` | flag | ✅ 已实现 | 显式标注 dry-run（默认已是）|
+| `--dry-run` | flag | ⛔ 未实现 | parser 中无此 flag；所有运行默认已是 dry-run，无需显式传入，传入不报错但不生效 |
 | `--issues` | string | ⛔ 未实现 | 逗号分隔的 issue identifier（如 LYN-36,LYN-76）— 当前不支持在线读取 |
 | `--parent` | string | ⛔ 未实现 | 父 issue id，只处理其子任务 — 当前不支持在线读取 |
 | `--status-filter` | string | ⛔ 未实现 | 只处理指定状态（todo,in_progress,done 等）— 当前不支持在线过滤 |
