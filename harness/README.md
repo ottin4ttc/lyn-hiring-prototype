@@ -156,19 +156,58 @@ node harness/harness-privacy-check.js \
 | `recommendation` | 建议动作（continue / review / block）|
 | `source_ref` | 触发警告的字段和内容摘要 |
 
-## privacy-check exit code 说明
+## privacy-check 状态等级与信号分类说明（LYN-1180 更新）
+
+### 风险等级（risk_level）
 
 `harness-privacy-check.js` 返回的 `risk_level` 含义如下：
 
 | risk_level | exit code | 含义 | 建议动作 |
 |---|---|---|---|
-| `CLEAR` | 0 | 未检测到任何 PII 或外部触达风险信号 | 可继续 |
-| `LOW` | 0 | 低风险，可能是误报 | 人工确认后可继续 |
-| `MEDIUM` | 1 | 中等风险，有可疑模式但非确定性违规 | 需要人工审核 |
-| `HIGH` | 1 | 高风险，检测到明确的 PII 或外部触达信号 | 必须人工介入 |
-| `BLOCKED` | 2 | **描述性红线触发**，匹配到"真实候选人"、真实邮箱、真实外部系统等语义模式 | 需要人工确认是否为真实违规或误判 |
+| `CLEAR` | 0 | 无任何信号 | 可继续 |
+| `LOW` | 0 | 仅有 WARN 或 guardrail-mention 信号（否定/边界描述） | 人工确认后可继续 |
+| `MEDIUM` | 1 | 有 actual-risk FAIL 但非高优先级分类 | 需要人工审核 |
+| `HIGH` | 1 | 有 actual-risk PII 或真实候选人 FAIL 信号 | 必须人工介入 |
+| `BLOCKED` | 2 | 有 actual-risk 外部触达 FAIL 信号 | 必须停止，处理后再继续 |
 
-> ⚠️ **`BLOCKED` ≠ 已发生真实违规。** `BLOCKED` 表示检测到描述性红线触发（如内容中出现"真实候选人"、邮箱地址等语义信号），需要**人工确认**是否确实存在 PII 或违规动作。常见的 false positive 包括：issue 讨论中明确说"禁止使用真实候选人"、"移除真实邮箱"等负向描述，也会匹配到同一规则。`BLOCKED` 的正确处理流程是：人工阅读 `source_ref` 中的 `excerpt` 字段，判断是否为实际风险，再决定是否继续。
+> ⚠️ **`BLOCKED` ≠ 已发生真实违规。** 查看 `checks[].classification` 判断每条信号的类型。
+
+### 信号分类（classification）— LYN-1180 新增
+
+每条 finding 现在包含 `classification` 字段：
+
+| classification | 含义 | 建议处理 |
+|---|---|---|
+| `actual-risk` | 实际 PII 或外部触达行为，需立即处理 | 按 `status` 处理：FAIL = 必须修复，WARN = 建议修复 |
+| `guardrail-mention` | 否定/禁止/边界声明，**常见 false-positive 来源** | 人工确认这是规则描述而非实际行为后，可继续 |
+
+**guardrail-mention 典型案例**：
+- "禁止写入飞书" → 触发 `ext_feishu_write` 但分类为 `guardrail-mention`
+- "不接入真实候选人数据" → 触发 `cand_non_synthetic` 但分类为 `guardrail-mention`
+- "验收标准：不触达真实候选人" → 触发多条规则但全部为 `guardrail-mention`
+
+**actual-risk 典型案例**：
+- "13812345678" 出现在文本中 → 分类为 `actual-risk`（手机号本身有 `noNegationCheck`）
+- "现在写入飞书文档" → 分类为 `actual-risk`
+- "给客户发送推荐包" → 分类为 `actual-risk`
+
+### 新增输出字段
+
+每条 finding 现在包含：
+- `classification`: `actual-risk` 或 `guardrail-mention`
+- `raw_signals`: 规则匹配到的原始字符串（最多 2 条）
+- `judgment_reason`: 判定理由
+- `human_review`: 针对当前分类的人工复核建议
+- `source_ref[].excerpt`: 改进的上下文摘要（含前后各 30-50 字符）
+
+summary 现在包含：
+- `actual_risk_count`: actual-risk FAIL 信号数量
+- `guardrail_mention_count`: guardrail-mention 信号数量（false-positive 候选）
+
+### 样例集
+
+- `harness/examples/privacy-check-fp-examples.json`: 3 条 guardrail-mention + 2 条 actual-risk 合成样例
+- `harness/examples/privacy-check-improvement-comparison.md`: 改进前后对比说明
 
 ## 安全边界
 
