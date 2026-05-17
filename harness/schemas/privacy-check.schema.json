@@ -21,7 +21,7 @@
         "risk_level": {
           "type": "string",
           "enum": ["CLEAR", "LOW", "MEDIUM", "HIGH", "BLOCKED"],
-          "description": "CLEAR=无风险；BLOCKED=有明确 PII 或不可控外部触达，必须人工处理后才能继续"
+          "description": "CLEAR=无风险；LOW=仅 WARN/guardrail-mention；BLOCKED=有 actual-risk PII、真实候选人数据、外部触达或真实系统写入 FAIL，必须人工处理后才能继续"
         },
         "recommendation": {
           "type": "string",

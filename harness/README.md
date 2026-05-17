@@ -166,11 +166,11 @@ node harness/harness-privacy-check.js \
 |---|---|---|---|
 | `CLEAR` | 0 | 无任何信号 | 可继续 |
 | `LOW` | 0 | 仅有 WARN 或 guardrail-mention 信号（否定/边界描述） | 人工确认后可继续 |
-| `MEDIUM` | 1 | 有 actual-risk FAIL 但非高优先级分类 | 需要人工审核 |
-| `HIGH` | 1 | 有 actual-risk PII 或真实候选人 FAIL 信号 | 必须人工介入 |
-| `BLOCKED` | 2 | 有 actual-risk 外部触达 FAIL 信号 | 必须停止，处理后再继续 |
+| `MEDIUM` | 1 | 有 actual-risk FAIL 但非 PII / 真实候选人 / 外部触达分类 | 需要人工审核 |
+| `HIGH` | 1 | 保留给高风险但未达到阻断条件的扩展规则 | 必须人工介入 |
+| `BLOCKED` | 2 | 有 actual-risk PII、真实候选人数据、外部触达或真实系统写入 FAIL 信号 | 必须停止，处理后再继续 |
 
-> ⚠️ **`BLOCKED` ≠ 已发生真实违规。** 查看 `checks[].classification` 判断每条信号的类型。
+> ⚠️ **`BLOCKED` 只表示检测到 actual-risk 阻断信号，不代表已发生真实外部动作。** 查看 `checks[].classification`、`raw_signals` 和 `source_ref[].excerpt` 判断命中证据。
 
 ### 信号分类（classification）— LYN-1180 新增
 
@@ -178,7 +178,7 @@ node harness/harness-privacy-check.js \
 
 | classification | 含义 | 建议处理 |
 |---|---|---|
-| `actual-risk` | 实际 PII 或外部触达行为，需立即处理 | 按 `status` 处理：FAIL = 必须修复，WARN = 建议修复 |
+| `actual-risk` | 实际 PII、真实候选人数据或外部触达行为，需立即处理 | 按 `status` 处理：FAIL = 必须修复并阻断，WARN = 建议修复 |
 | `guardrail-mention` | 否定/禁止/边界声明，**常见 false-positive 来源** | 人工确认这是规则描述而非实际行为后，可继续 |
 
 **guardrail-mention 典型案例**：
@@ -187,7 +187,8 @@ node harness/harness-privacy-check.js \
 - "验收标准：不触达真实候选人" → 触发多条规则但全部为 `guardrail-mention`
 
 **actual-risk 典型案例**：
-- "13812345678" 出现在文本中 → 分类为 `actual-risk`（手机号本身有 `noNegationCheck`）
+- "13812345678" / `candidate@redacted.invalid` / `linkedin.com/in/...` / `ou_xxx` 出现在文本中 → 分类为 `actual-risk`（这些标识本身有 `noNegationCheck`）
+- "候选人王某曾在某公司负责推理平台" 且未标注 synthetic/mock/no_real_pii → 分类为 `actual-risk`
 - "现在写入飞书文档" → 分类为 `actual-risk`
 - "给客户发送推荐包" → 分类为 `actual-risk`
 

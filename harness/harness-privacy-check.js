@@ -109,23 +109,30 @@ const PII_PATTERNS = [
     name: '邮箱地址',
     // Exclude common example domains and placeholder patterns
     pattern: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
-    severity: 'MEDIUM',
+    severity: 'HIGH',
     filter: (match) => !match.includes('example.') && !match.includes('test.') && !match.includes('mock.'),
     noNegationCheck: true, // 邮箱本身是 PII，即使说"不发邮件"出现真实邮箱仍是风险
+  },
+  {
+    id: 'pii_open_id',
+    name: '飞书 open_id（可能关联真实用户）',
+    pattern: /\b(?:ou|on|oc)_[a-zA-Z0-9]{12,}\b/g,
+    severity: 'HIGH',
+    noNegationCheck: true,
   },
   {
     id: 'pii_real_name_pattern',
     name: '疑似真实中文姓名',
     // Heuristic: 候选人 + 2-4 Chinese chars that look like names
     pattern: /候选人[\u4e00-\u9fa5]{2,4}(?:[先生女士]|的|已|曾|在)/g,
-    severity: 'MEDIUM',
+    severity: 'HIGH',
     // 允许否定分类 — "候选人张三" 可能是举例说"禁止使用候选人张三的数据"
   },
   {
     id: 'pii_linkedin_url',
     name: 'LinkedIn 个人主页（可能含真实个人信息）',
     pattern: /linkedin\.com\/in\/[a-zA-Z0-9\-_]+/g,
-    severity: 'MEDIUM',
+    severity: 'HIGH',
     noNegationCheck: true,
   },
   {
@@ -174,6 +181,8 @@ const EXTERNAL_ACTION_PATTERNS = [
 ];
 
 // ─── Real Candidate Data Rules ───────────────────────────────────────────────
+const CANDIDATE_REF_PATTERN = /候选人|\bcandidate\s+(?:data|profile|resume|contact|name|phone|email|record|records|assessment|evaluation|shortlist)\b/i;
+
 const REAL_CANDIDATE_PATTERNS = [
   {
     id: 'cand_non_synthetic',
@@ -181,7 +190,7 @@ const REAL_CANDIDATE_PATTERNS = [
     // This is a meta-check: if description mentions "候选人" but NOT "synthetic/mock/合成/匿名"
     // LYN-1180: 如果文本以"禁止使用真实候选人"等否定形式出现，额外考虑是否为 guardrail 声明
     checkFn: (text) => {
-      const hasCandidateRef = /候选人|candidate/i.test(text);
+      const hasCandidateRef = CANDIDATE_REF_PATTERN.test(text);
       const hasSafeLabel = /synthetic|mock|合成|匿名|no_real_pii|虚拟|模拟|模拟数据/i.test(text);
       if (!hasCandidateRef) return false;
       if (hasSafeLabel) return false;
@@ -189,7 +198,7 @@ const REAL_CANDIDATE_PATTERNS = [
       // （由调用方通过 classifySignal 进一步判断；这里只决定是否发出信号）
       return true;
     },
-    severity: 'MEDIUM',
+    severity: 'HIGH',
     note: '包含"候选人"但未标注 synthetic/mock；需确认是否为真实数据',
   },
   {
@@ -215,6 +224,9 @@ function reviewAdvice(classification, category) {
   }
   if (category === 'pii') {
     return '⚠️ 实际 PII 信号，必须移除或替换为 synthetic/mock 数据。';
+  }
+  if (category === 'real_candidate') {
+    return '⚠️ 真实候选人数据红线信号，必须确认来源并替换为 synthetic/mock/no_real_pii 样例后才能继续。';
   }
   return '需人工确认该信号是否为实际风险。';
 }
@@ -335,22 +347,27 @@ function scanText(text, issueRef) {
   for (const rule of REAL_CANDIDATE_PATTERNS) {
     if (rule.checkFn) {
       if (rule.checkFn(text)) {
-        const candidateMatch = text.match(/候选人|candidate/i);
+        const candidateMatch = text.match(CANDIDATE_REF_PATTERN);
         const candidateIndex = candidateMatch ? text.indexOf(candidateMatch[0]) : 0;
-        const classification = classifySignal(text, candidateIndex, candidateMatch ? candidateMatch[0] : '候选人');
+        const rawSignal = candidateMatch ? candidateMatch[0] : '候选人';
+        const classification = classifySignal(text, candidateIndex, rawSignal);
+        const excerpt = extractExcerpt(text, candidateIndex, rawSignal, 35, 80).slice(0, 200);
         findings.push({
           check_id: rule.id,
           check_name: rule.name,
           category: 'real_candidate',
           classification,
+          raw_signals: [rawSignal],
           status: classification === 'guardrail-mention' ? 'WARN' : (rule.severity === 'HIGH' ? 'FAIL' : 'WARN'),
           description: rule.note || rule.name,
           judgment_reason: classification === 'guardrail-mention'
             ? '文本包含"候选人"但处于否定语境，判断为 guardrail-mention。'
             : '未检测到否定前缀和 synthetic/mock 标注，判断为 actual-risk。',
           human_review: reviewAdvice(classification, 'real_candidate'),
-          source_ref: [{ ...issueRef, matched_pattern: rule.id }],
-          remediation: '确认数据为 synthetic/mock；添加 no_real_pii 标注',
+          source_ref: [{ ...issueRef, matched_pattern: rule.id, excerpt }],
+          remediation: classification === 'guardrail-mention'
+            ? '否定上下文，建议人工确认是否为真实候选人数据'
+            : '阻断并替换为 synthetic/mock；添加 no_real_pii 标注',
         });
       }
     } else if (rule.pattern) {
@@ -459,11 +476,15 @@ function runChecks(data) {
     // 只有 guardrail-mention 或 WARN 级别信号
     riskLevel = guardrailMentionCount > 0 ? 'LOW' : 'LOW';
     recommendation = 'review';
-  } else if (hasFail && highRiskCategories.has('external_action')) {
+  } else if (
+    hasFail &&
+    (
+      highRiskCategories.has('external_action') ||
+      highRiskCategories.has('pii') ||
+      highRiskCategories.has('real_candidate')
+    )
+  ) {
     riskLevel = 'BLOCKED';
-    recommendation = 'block';
-  } else if (hasFail && (highRiskCategories.has('pii') || highRiskCategories.has('real_candidate'))) {
-    riskLevel = 'HIGH';
     recommendation = 'block';
   } else if (hasFail) {
     riskLevel = 'MEDIUM';
@@ -617,8 +638,8 @@ Options:
   CLEAR   = 无任何信号
   LOW     = 仅有 WARN 或 guardrail-mention（否定/边界描述）信号
   MEDIUM  = 有 actual-risk FAIL 但非高优先级分类
-  HIGH    = 有 actual-risk PII 或真实候选人 FAIL 信号
-  BLOCKED = 有 actual-risk 外部触达 FAIL 信号，必须人工处理后才能继续
+  HIGH    = 保留给高风险但未达到阻断条件的扩展规则
+  BLOCKED = 有 actual-risk PII、真实候选人数据、外部触达或真实系统写入 FAIL 信号
 
 信号分类（LYN-1180）：
   actual-risk       = 实际 PII/外部触达，需立即处理

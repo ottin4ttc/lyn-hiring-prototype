@@ -42,13 +42,13 @@
     {
       "id": "ar-001",
       "type": "actual-risk",
-      "label": "🔴 actual-risk：真实手机号出现在内容中",
-      "text": "候选人王某的手机号是 13812345678，请猎头团队直接联系。面试安排已发至其邮箱 candidate@realmail.com。",
+      "label": "🔴 actual-risk：真实手机号/邮箱/LinkedIn 出现在内容中",
+      "text": "候选人王某的手机号是 13812345678，请猎头团队直接联系。面试安排已发至其邮箱 candidate@redacted.invalid，LinkedIn 为 linkedin.com/in/synthetic-person-123。",
       "expected_classification": "actual-risk",
       "expected_status": "FAIL",
       "expected_risk_level": "BLOCKED",
-      "why_actual_risk": "手机号 13812345678 是真实格式的 PII，邮件地址 candidate@realmail.com 也是实际邮箱（非 example/test 域名）。两者都需立即清除或替换为 synthetic 数据。",
-      "triggers": ["13812345678", "candidate@realmail.com"]
+      "why_actual_risk": "手机号 13812345678 是真实格式的 PII，邮件地址 candidate@redacted.invalid 也是实际邮箱格式（非 example/test/mock 域名），LinkedIn URL 可能关联真实个人主页。三者都需立即清除或替换为 synthetic 数据。",
+      "triggers": ["13812345678", "candidate@redacted.invalid", "linkedin.com/in/synthetic-person-123"]
     },
     {
       "id": "ar-002",

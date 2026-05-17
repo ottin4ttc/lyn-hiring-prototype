@@ -37,12 +37,31 @@
 
 | 指标 | 改进前 | 改进后 |
 |---|---|---|
-| risk_level | `BLOCKED` | `HIGH` |
+| risk_level | `BLOCKED` | `BLOCKED` |
 | pii_cn_mobile 状态 | `FAIL` | `FAIL（actual-risk）` |
 | classification | ❌ 无字段 | ✅ `actual-risk` |
 | raw_signals | ❌ 无 | ✅ `["13812345678"]` |
 
-**结论**：真实 PII 仍被正确检测并升级为 FAIL，未因改进而漏报。
+**结论**：真实 PII 仍被正确检测并升级为 FAIL/BLOCKED，未因改进而漏报。
+
+---
+
+## 对比示例 2b：实际邮箱、LinkedIn 与真实候选人描述
+
+**输入**：
+```
+候选人王某曾在某大型模型公司负责推理平台，可通过 candidate@redacted.invalid 或 linkedin.com/in/synthetic-person-123 联系。
+```
+
+| 指标 | 改进前 | 改进后 |
+|---|---|---|
+| risk_level | `LOW` | `BLOCKED` |
+| pii_email 状态 | `WARN` | `FAIL（actual-risk）` |
+| pii_linkedin_url 状态 | `WARN` | `FAIL（actual-risk）` |
+| pii_real_name_pattern 状态 | `WARN` | `FAIL（actual-risk）` |
+| cand_non_synthetic 状态 | `WARN`，无 excerpt | `FAIL（actual-risk）`，带 `raw_signals` + `source_ref.excerpt` |
+
+**结论**：真实邮箱、LinkedIn URL、真实候选人描述和非合成候选人数据不因 false-positive 降噪而放行。
 
 ---
 
@@ -90,4 +109,3 @@
 - `guardrail-mention` 信号状态降级为 WARN，而非直接 PASS
 - 所有 `guardrail-mention` 都有 `human_review` 字段要求人工确认
 - `recommendation` 为 `review`，不会自动放行
-
